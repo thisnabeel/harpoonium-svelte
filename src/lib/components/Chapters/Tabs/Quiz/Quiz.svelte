@@ -43,12 +43,26 @@
 	{:else}
 		<span>{@html quiz.question}</span>
 	{/if}
+
+	<hr />
+	{#if quiz.breadcrumbs}
+		<small class="author"
+			>- {#each quiz.breadcrumbs as crumb}
+				{crumb.title + ' '}
+			{/each}
+		</small>
+	{/if}
 	{#if linkable}
 		<span class="fa fa-link link" on:click={() => goto('/chapters/' + quiz.quizable_id)} />
 	{/if}
 </li>
 
 <style>
+	.author {
+		color: rgb(126, 126, 126);
+		font-style: italic;
+		font-size: 16px;
+	}
 	.link {
 		position: absolute;
 		left: -40px;

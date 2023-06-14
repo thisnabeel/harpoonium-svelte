@@ -14,14 +14,16 @@
 	import Creds from '$lib/nav-buttons/creds/Creds.svelte';
 
 	let user_signed_in;
+	user.subscribe((value) => (user_signed_in = value));
 
 	let csrf;
+	let pageLoaded = false;
 	onMount(async function () {
 		// const csrfToken = document.querySelector('meta[name=csrf-token]').content;
 		// console.log(csrfToken)
-		csrf = await Api.get('/generate_csrf');
-		csrf_token.set(csrf);
-		user.subscribe((value) => (user_signed_in = value));
+		pageLoaded = true;
+		// csrf = await Api.get('/generate_csrf');
+		// csrf_token.set(csrf);
 		// console.log(csrf_token)
 	});
 </script>
@@ -31,7 +33,11 @@
 </svelte:head>
 
 <main>
-	{#if $user}
+	{#if !pageLoaded}
+		<picture class="logo">
+			<img src="/logo-light.png" alt="harpoonium Logo" />
+		</picture>
+	{:else if $user}
 		<NavButtons />
 		<Header />
 		<slot />
@@ -73,6 +79,13 @@
 
 	footer a {
 		font-weight: bold;
+	}
+
+	.logo img {
+		margin: 0 auto;
+		margin-top: 30px;
+		display: block;
+		max-width: 200px;
 	}
 
 	@media (min-width: 480px) {

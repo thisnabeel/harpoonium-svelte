@@ -43,6 +43,10 @@
 	let view = 'signIn';
 </script>
 
+<picture class="logo">
+	<img src="/logo-light.png" alt="harpoonium Logo" />
+</picture>
+
 {#if view === 'signIn'}
 	<div class="form">
 		<img src="/sign-in.png" alt="" class="sign-up-img creds-header-img" />
@@ -121,5 +125,12 @@
 		border: 1px solid #ced4da;
 		border-radius: 0.25rem;
 		transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+	}
+
+	.logo img {
+		margin: 0 auto;
+		margin-top: 30px;
+		display: block;
+		max-width: 200px;
 	}
 </style>
