@@ -3,6 +3,7 @@
 	import { openModal } from 'svelte-modals';
 	import ChapterModal from '$lib/modals/videos/chapter.svelte';
 	import { goto } from '$app/navigation';
+	import Editor from 'cl-editor/src/Editor.svelte';
 
 	export let user;
 	export let refresh = () => {};
@@ -28,17 +29,67 @@
 		}, 1000);
 	};
 
+	let editor;
+
 	//
 </script>
 
 <li class:has_video={quiz && quiz.preview}>
 	{#if user && user.admin === true}
-		<span contenteditable on:keyup={(e) => debounce(event.target.innerHTML)}
+		<!-- <span contenteditable on:keyup={(e) => debounce(event.target.innerHTML)}
 			>{@html quiz.question}</span
-		>
-
+		> -->
 		{#if editable}
-			<span class="fa fa-trash" on:click={() => destroy(quiz.id)} />
+			<div class="editable">
+				<Editor
+					bind:this={editor}
+					html={quiz.question}
+					height={'max-content'}
+					actions={[
+						'b',
+						'i',
+						'u',
+						{
+							name: 'copy', // required
+							icon: '<b>C</b>', // string or html string (ex. <svg>...</svg>)
+							title: 'Copy',
+							result: () => {
+								// copy current selection or whole editor content
+								const selection = window.getSelection();
+								// if (!selection.toString().length) {
+								// 	const range = document.createRange();
+								// 	range.selectNodeContents(editor.refs.editor);
+								// 	selection.removeAllRanges();
+								// 	selection.addRange(range);
+								// }
+								// editor.exec('copy');
+
+								if (selection.toString().length > 0) {
+									// Create a new span element
+									var span = document.createElement('span');
+									span.className = 'blanked';
+
+									// Wrap the selected text in the span element
+									span.appendChild(selection.getRangeAt(0).cloneContents());
+
+									// Replace the selected text with the span element
+									selection.getRangeAt(0).deleteContents();
+									selection.getRangeAt(0).insertNode(span);
+
+									debounce(editor.getHtml());
+								}
+							}
+						}
+					]}
+					on:change={(evt) => {
+						debounce(evt.detail);
+					}}
+				/>
+
+				<span class="fa fa-trash" on:click={() => destroy(quiz.id)} />
+			</div>
+		{:else}
+			<span>{@html quiz.question}</span>
 		{/if}
 	{:else}
 		<span>{@html quiz.question}</span>
@@ -114,6 +165,16 @@
 		border-radius: 10px;
 		max-width: 100%;
 		z-index: 100;
+	}
+
+	li :global(.blanked) {
+		background-color: rgb(0, 0, 0);
+	}
+	li .editable :global(.blanked) {
+		background-color: rgb(233, 233, 233);
+	}
+	li :global(.blanked:hover) {
+		background-color: rgb(233, 233, 233);
 	}
 
 	@media (max-width: 480px) {
