@@ -12,6 +12,7 @@
 	import GaragePopUp from '$lib/pop-ups/Garage.svelte';
 
 	import Creds from '$lib/nav-buttons/creds/Creds.svelte';
+	import { theme } from '$lib/stores/main';
 
 	let user_signed_in;
 	user.subscribe((value) => (user_signed_in = value));
@@ -30,6 +31,19 @@
 
 <svelte:head>
 	<meta name="csrf-token" content={csrf} />
+	{#if $theme === 'default'}
+		<style>
+			body {
+				background: #fce3bf !important;
+			}
+		</style>
+	{:else if $theme === 'dark'}
+		<style>
+			body {
+				background: #0c0c0c !important;
+			}
+		</style>
+	{/if}
 </svelte:head>
 
 <main>

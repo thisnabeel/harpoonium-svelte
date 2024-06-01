@@ -37,3 +37,5 @@ export const signIn = () => {
 	selectedWonder.set(null);
 	selectedChapter.set(null);
 };
+
+export const theme = writable('default');

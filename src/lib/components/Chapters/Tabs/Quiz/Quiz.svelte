@@ -4,6 +4,7 @@
 	import ChapterModal from '$lib/modals/videos/chapter.svelte';
 	import { goto } from '$app/navigation';
 	import Editor from 'cl-editor/src/Editor.svelte';
+	import { theme } from '$lib/stores/main';
 
 	export let user;
 	export let refresh = () => {};
@@ -34,7 +35,7 @@
 	//
 </script>
 
-<li class:has_video={quiz && quiz.preview}>
+<li class:has_video={quiz && quiz.preview} class={$theme}>
 	{#if user && user.admin === true}
 		<!-- <span contenteditable on:keyup={(e) => debounce(event.target.innerHTML)}
 			>{@html quiz.question}</span
@@ -89,10 +90,10 @@
 				<span class="fa fa-trash" on:click={() => destroy(quiz.id)} />
 			</div>
 		{:else}
-			<span>{@html quiz.question}</span>
+			<span class="question">{@html quiz.question}</span>
 		{/if}
 	{:else}
-		<span>{@html quiz.question}</span>
+		<span class="question">{@html quiz.question}</span>
 	{/if}
 
 	<hr />
@@ -119,6 +120,10 @@
 		left: -40px;
 		top: 20px;
 	}
+
+	.dark .link {
+		color: #ff7e60;
+	}
 	.hidden {
 		display: none;
 	}
@@ -127,14 +132,24 @@
 		list-style: none;
 		padding: 30px;
 		position: relative;
-
-		/* margin-bottom: 10px; */
-		/* background: #e6d2ff; */
-
 		margin-bottom: 10px;
 		background: #ffffff;
 		border-radius: 8px;
 		box-shadow: 1px 1px 5px 3px #ccc;
+	}
+
+	li.dark {
+		list-style: none;
+		padding: 30px;
+		position: relative;
+		margin-bottom: 10px;
+		background: #481e13;
+		border-radius: 8px;
+		box-shadow: 1px 1px 5px 3px #0c0c0c;
+	}
+
+	.dark .question {
+		color: #ff7e60;
 	}
 
 	.fa-trash {

@@ -7,7 +7,8 @@
 		selectChapter,
 		selectWonder,
 		selectedChapter,
-		selectedFeel
+		selectedFeel,
+		theme
 	} from '$lib/stores/main';
 
 	import Fa from 'svelte-fa';
@@ -64,7 +65,7 @@
 </script>
 
 {#if type === 'chapter'}
-	<li class="chapter">
+	<li class="chapter {$theme}">
 		<span on:click|once={handleChapterClick(item.id)}>{item.title}</span>
 
 		{#each item.chapters as chapter}
@@ -91,12 +92,17 @@
 <style>
 	li {
 		margin-left: 10px;
-		border-left: 6px solid #ffeaa7;
+		border-left: 6px solid #b6a777;
 		font-size: 18px;
 		/* border-bottom: 6px solid #f9ecc2; */
 		margin-bottom: 0;
 		padding-left: 12px;
 		cursor: pointer;
+	}
+
+	li.dark {
+		border-left: 6px solid rgb(228 146 127);
+		color: #ffdbd3;
 	}
 
 	li:hover {

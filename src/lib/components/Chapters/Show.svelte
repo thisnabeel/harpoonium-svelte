@@ -1,7 +1,7 @@
 <script>
 	import { openModal } from 'svelte-modals';
 	import ChapterModal from '$lib/modals/videos/chapter.svelte';
-	import { chapters } from '$lib/stores/main';
+	import { chapters, theme } from '$lib/stores/main';
 
 	import { page } from '$app/stores';
 	import { navigating, updated } from '$app/stores';
@@ -11,6 +11,7 @@
 
 	import Abstraction from '$lib/components/Abstraction/Abstraction.svelte';
 	import Quizzes from './Tabs/Quiz/Quizzes.svelte';
+	import Mapper from './Mapper/Mapper.svelte';
 
 	export let chapter;
 
@@ -35,20 +36,22 @@
 
 	// $: console.log($user);
 
-	let tabs = ['Abstractions', 'Quiz'];
-	let activeTab = 'Abstractions';
+	let tabs = ['Concepts', 'Mapper', 'Writer'];
+	let activeTab = 'Concepts';
 </script>
 
-<section class="wrapper">
+<section class={'wrapper ' + $theme}>
 	<h1 class="title">{chapter.title}</h1>
 
-	<div class="flex">
-		{#each tabs as tab}
-			<div class="tab" class:active={activeTab === tab} on:click={() => (activeTab = tab)}>
-				{tab}
-			</div>
-		{/each}
-	</div>
+	{#if tabs.length > 1}
+		<div class="flex">
+			{#each tabs as tab}
+				<div class="tab" class:active={activeTab === tab} on:click={() => (activeTab = tab)}>
+					{tab}
+				</div>
+			{/each}
+		</div>
+	{/if}
 
 	{#if activeTab === 'Abstractions'}
 		<ul class="abstractions">
@@ -67,14 +70,22 @@
 		</ul>
 	{/if}
 
-	{#if activeTab === 'Quiz'}
+	{#if activeTab === 'Concepts'}
 		<Quizzes {chapter} user={$user} />
+	{/if}
+
+	{#if activeTab === 'Mapper'}
+		<Mapper parentId={chapter.id} />
 	{/if}
 </section>
 
 <style>
 	.tab {
 		padding: 14px;
+	}
+
+	.dark .tab {
+		color: #fff;
 	}
 	.tab.active {
 		background-color: #000;
@@ -107,6 +118,14 @@
 		padding: 30px;
 		border-radius: 10px;
 		position: relative;
+	}
+
+	.dark {
+		background: #481e14;
+	}
+
+	.dark h1 {
+		color: #f2613f;
 	}
 
 	.abstractions {

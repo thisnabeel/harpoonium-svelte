@@ -7,7 +7,7 @@
 
 	import Map from './Map/Map.svelte';
 
-	import { chapters, chaptersMap, wonders, wondersMap, mapShown } from '$lib/stores/main';
+	import { chapters, chaptersMap, wonders, wondersMap, mapShown, theme } from '$lib/stores/main';
 
 	import { Col, Container, Row, Styles } from 'sveltestrap';
 	import Input from './Input/Input.svelte';
@@ -89,7 +89,7 @@
 <Styles />
 
 <Container>
-	<div class="row">
+	<div class="row {$theme}">
 		<div class="big-col">
 			<div class="cta-search">
 				<u>Applied</u> phenomenons
@@ -179,6 +179,15 @@
 	}
 	.show-whole-map:hover {
 		background: #fff;
+	}
+
+	.dark .show-whole-map {
+		border: 0;
+		color: #e4927e;
+		background-color: #481e13;
+		background-image: -webkit-linear-gradient(top, rgb(153 64 41), rgba(255, 255, 255, 0));
+		box-shadow: 0 1px 0 rgb(0 0 0 / 30%), 0 2px 2px -1px rgb(0 0 0 / 50%),
+			0 1px 0 rgb(255 255 255 / 30%) inset;
 	}
 
 	.btn-open {

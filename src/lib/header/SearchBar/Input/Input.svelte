@@ -1,5 +1,5 @@
 <script>
-	import { chapters, selectChapter, wonders, selectWonder } from '$lib/stores/main';
+	import { chapters, selectChapter, wonders, selectWonder, theme } from '$lib/stores/main';
 	import { goto } from '$app/navigation';
 
 	let input;
@@ -27,7 +27,9 @@
 
 	const handleInputClick = () => {
 		if (query.length > 0) return;
+		if (items.length < 1) return;
 
+		console.log({ items });
 		let randomItems = [];
 		while (randomItems.length < 6) {
 			const randomElement = items[Math.floor(Math.random() * items.length)];
@@ -60,7 +62,7 @@
 	}
 </script>
 
-<div class="wrapper {type}">
+<div class="wrapper {type} {$theme}">
 	<input
 		type="text"
 		on:click={() => handleInputClick()}
@@ -134,7 +136,21 @@
 		font-family: 'GreycliffCF-Bold';
 	}
 
+	.dark input {
+		padding: 20px;
+		font-size: 24px;
+		border: 1px solid #481e13;
+		margin-bottom: 10px;
+		background: #481e14;
+		width: 100%;
+		font-family: 'GreycliffCF-Bold';
+	}
+
 	input:hover {
 		background: #eaf7ff;
+	}
+
+	.dark input:hover {
+		background-color: #9b3922;
 	}
 </style>

@@ -7,11 +7,21 @@
 	import { listen } from 'svelte/internal';
 	import { user } from '$lib/stores/user';
 
+	export let parentId = null;
 	let chapters;
 	let newChapterTitle = '';
 	chaptersMap.subscribe((value) => {
 		console.log('chaptersMap', value);
-		chapters = value;
+
+		if (parentId) {
+			parent = value.find((c) => c.id === parentId);
+			if (parent) {
+				chapters = parent.chapters;
+			}
+			console.log('map', chapters);
+		} else {
+			chapters = value;
+		}
 	});
 
 	onMount(() => {
@@ -74,7 +84,7 @@
 
 				const response = await Api.post('/chapters.json', {
 					title: newChapterTitle,
-					chapter_id: $selectedChapter.id,
+					chapter_id: $selectedChapter.id || parentId,
 					position: node.chapters.length + 1,
 					user_id: $user.id
 				});
@@ -87,7 +97,8 @@
 				const response = await Api.post('/chapters.json', {
 					title: newChapterTitle,
 					position: chapters.length + 1,
-					user_id: $user.id
+					user_id: $user.id,
+					chapter_id: parentId
 				});
 				chapters = [...chapters, response];
 			}
@@ -184,9 +195,9 @@
 					grandparentNode.chapters = [...grandparentNode.chapters, element];
 					changed = [...changed, grandparentNode];
 				} else {
-					element.chapter_id = null;
+					element.chapter_id = parentId;
 					clone = [...clone, element];
-					changed = [...changed, null];
+					changed = [...changed, parentId];
 				}
 
 				// chapters = clone;

@@ -41,8 +41,6 @@ body {
 	margin: 0;
 	/* background: #f6edee; */
 	font-family: 'GreycliffCF-Bold';
-
-	background: #fce3bf !important;
 }
 
 body::before {
