@@ -74,4 +74,11 @@
 		top: 0;
 		display: block;
 	}
+
+	@media (max-width: 480px) {
+		.quizzes {
+			margin: 0;
+			width: 100%;
+		}
+	}
 </style>

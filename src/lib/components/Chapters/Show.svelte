@@ -36,7 +36,7 @@
 
 	// $: console.log($user);
 
-	let tabs = ['Concepts', 'Mapper', 'Writer'];
+	let tabs = ['Concepts', 'Research', 'Mapper', 'Writer'];
 	let activeTab = 'Concepts';
 </script>
 
@@ -72,6 +72,10 @@
 
 	{#if activeTab === 'Concepts'}
 		<Quizzes {chapter} user={$user} />
+	{/if}
+
+	{#if activeTab === 'Research'}
+		<Research {chapter} user={$user} />
 	{/if}
 
 	{#if activeTab === 'Mapper'}

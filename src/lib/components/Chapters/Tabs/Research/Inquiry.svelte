@@ -9,7 +9,7 @@
 	export let user;
 	export let refresh = () => {};
 	export let chapter;
-	export let quiz;
+	export let inquiry;
 	export let destroy;
 	export let editable = true;
 	export let linkable = false;
@@ -21,11 +21,11 @@
 	const debounce = (v) => {
 		clearTimeout(timer);
 		timer = setTimeout(async () => {
-			const response = await Api.put('/quizzes/' + quiz.id + '.json', {
+			const response = await Api.put('/inquiries/' + inquiry.id + '.json', {
 				question: v,
 				method: '_post'
 			});
-			// let response = await Api.get("/quizzes/"+quiz.id+".json")
+			// let response = await Api.get("/inquiries/"+inquiry.id+".json")
 			console.log('response', response);
 		}, 1000);
 	};
@@ -35,16 +35,16 @@
 	//
 </script>
 
-<li class:has_video={quiz && quiz.preview} class={$theme}>
+<li class:has_video={inquiry && inquiry.preview} class={$theme}>
 	{#if user && user.admin === true}
 		<!-- <span contenteditable on:keyup={(e) => debounce(event.target.innerHTML)}
-			>{@html quiz.question}</span
+			>{@html inquiry.question}</span
 		> -->
 		{#if editable}
 			<div class="editable">
 				<Editor
 					bind:this={editor}
-					html={quiz.question}
+					html={inquiry.question}
 					height={'max-content'}
 					actions={[
 						'b',
@@ -87,25 +87,25 @@
 					}}
 				/>
 
-				<span class="fa fa-trash" on:click={() => destroy(quiz.id)} />
+				<span class="fa fa-trash" on:click={() => destroy(inquiry.id)} />
 			</div>
 		{:else}
-			<span class="question">{@html quiz.question}</span>
+			<span class="question">{@html inquiry.question}</span>
 		{/if}
 	{:else}
-		<span class="question">{@html quiz.question}</span>
+		<span class="question">{@html inquiry.question}</span>
 	{/if}
 
 	<hr />
-	{#if quiz.breadcrumbs}
+	{#if inquiry.breadcrumbs}
 		<small class="author"
-			>- {#each quiz.breadcrumbs as crumb}
+			>- {#each inquiry.breadcrumbs as crumb}
 				{crumb.title + ' '}
 			{/each}
 		</small>
 	{/if}
 	{#if linkable}
-		<span class="fa fa-link link" on:click={() => goto('/chapters/' + quiz.quizable_id)} />
+		<span class="fa fa-link link" on:click={() => goto('/chapters/' + inquiry.inquiryable_id)} />
 	{/if}
 </li>
 
@@ -213,30 +213,12 @@
 			max-width: 170px;
 		}
 
-		.quizzes {
+		.inquiries {
 			width: 100%;
 		}
 
-		.quizzes .has_video {
+		.inquiries .has_video {
 			padding-top: 55px;
-		}
-	}
-
-	@media (max-width: 480px) {
-		li {
-			margin: 0;
-			border-radius: 0;
-			box-shadow: 1px 1px 0px 3px #f2eeee;
-		}
-
-		li .link {
-			position: absolute;
-			left: auto;
-			top: auto;
-			right: 20px;
-			bottom: 13px;
-			color: #eee;
-			z-index: 9999;
 		}
 	}
 </style>

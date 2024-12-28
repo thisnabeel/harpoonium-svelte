@@ -51,4 +51,10 @@
 		margin: 0 auto;
 		padding: 20px 0;
 	}
+
+	@media (max-width: 480px) {
+		.quizzes {
+			margin: 0;
+		}
+	}
 </style>
