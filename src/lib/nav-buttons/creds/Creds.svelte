@@ -2,6 +2,7 @@
 	import Api from '$lib/api/api';
 	import { goto } from '$app/navigation';
 	import { user } from '$lib/stores/user';
+	import { theme } from '$lib/stores/main';
 
 	let username;
 	let email;
@@ -48,14 +49,18 @@
 </picture>
 
 {#if view === 'signIn'}
-	<div class="form">
+	<div class="form {$theme}">
 		<img src="/sign-in.png" alt="" class="sign-up-img creds-header-img" />
 
-		<label>Username or Email:</label>
-		<input type="text" bind:value={username} />
+		<div class="input-group">
+			<label>Username or Email:</label>
+			<input type="text" bind:value={username} placeholder="Enter your username or email" />
+		</div>
 
-		<label>Password:</label>
-		<input type="password" bind:value={password} />
+		<div class="input-group">
+			<label>Password:</label>
+			<input type="password" bind:value={password} placeholder="Enter your password" />
+		</div>
 
 		<button on:click={() => authenticate('signIn')}>Log In</button>
 		<hr />
@@ -64,20 +69,28 @@
 		</div>
 	</div>
 {:else}
-	<div class="form">
+	<div class="form {$theme}">
 		<img src="/sign-up.png" alt="" class="sign-up-img creds-header-img" />
 
-		<label>Email:</label>
-		<input type="text" bind:value={email} />
+		<div class="input-group">
+			<label>Email:</label>
+			<input type="text" bind:value={email} placeholder="Enter your email" />
+		</div>
 
-		<label>Username:</label>
-		<input type="text" bind:value={username} />
+		<div class="input-group">
+			<label>Username:</label>
+			<input type="text" bind:value={username} placeholder="Choose a username" />
+		</div>
 
-		<label>Password:</label>
-		<input type="password" bind:value={password} />
+		<div class="input-group">
+			<label>Password:</label>
+			<input type="password" bind:value={password} placeholder="Choose a password" />
+		</div>
 
-		<label>Confirm Password:</label>
-		<input type="password" bind:value={confirmPassword} />
+		<div class="input-group">
+			<label>Confirm Password:</label>
+			<input type="password" bind:value={confirmPassword} placeholder="Confirm your password" />
+		</div>
 
 		<button on:click={() => authenticate('signUp')}>Sign Up</button>
 		<hr />
@@ -88,6 +101,31 @@
 {/if}
 
 <style>
+	.dark.form {
+		background: transparent;
+		border: 9px solid #000000;
+	}
+
+	.dark.form input {
+		background: #641601;
+		color: #fff;
+		border-color: #8b1e01;
+	}
+
+	.dark.form input:focus {
+		background: #7a1c01;
+		border-color: #a32301;
+		box-shadow: 0 0 0 2px rgba(163, 35, 1, 0.25);
+	}
+
+	.dark.form input::placeholder {
+		color: rgba(255, 255, 255, 0.5);
+	}
+
+	.dark.form label {
+		color: #fff;
+	}
+
 	.form {
 		max-width: 300px;
 		margin: 30px auto;
@@ -103,28 +141,87 @@
 		width: 100%;
 	}
 
+	.input-group {
+		margin-bottom: 1.25rem;
+		width: 90%;
+	}
+
+	label {
+		display: block;
+		margin-bottom: 0.5rem;
+		font-family: GreyCliffCF-Regular;
+		font-size: 0.9rem;
+		font-weight: 500;
+	}
+
 	input {
 		width: 100%;
 		font-family: GreyCliffCF-Regular;
 		color: rgb(49, 49, 49);
-		border: solid 1px #ccc;
+		background-color: #fff;
+		border: 2px solid #ced4da;
+		border-radius: 6px;
+		padding: 0.75rem 1rem;
+		font-size: 0.95rem;
+		line-height: 1.5;
+		transition: all 0.2s ease-in-out;
+	}
+
+	input:focus {
+		outline: none;
+		border-color: #fffe8b;
+		box-shadow: 0 0 0 3px rgba(255, 254, 139, 0.25);
+	}
+
+	input::placeholder {
+		color: #adb5bd;
 	}
 
 	button {
-		margin-top: 10px;
+		margin-top: 1.5rem;
 		background-color: #fffe8b;
 		display: block;
 		width: 100%;
-		height: calc(1.5em + 0.75rem + 2px);
-		padding: 0.375rem 0.75rem;
+		padding: 0.75rem 1rem;
 		font-size: 1rem;
-		font-weight: 400;
+		font-weight: 600;
 		line-height: 1.5;
 		color: #495057;
-		background-clip: padding-box;
-		border: 1px solid #ced4da;
-		border-radius: 0.25rem;
-		transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+		border: 2px solid #fffe8b;
+		border-radius: 6px;
+		transition: all 0.2s ease-in-out;
+		cursor: pointer;
+	}
+
+	button:hover {
+		background-color: #fffd6b;
+		border-color: #fffd6b;
+	}
+
+	.text-center {
+		text-align: center;
+		margin-top: 1rem;
+		cursor: pointer;
+	}
+
+	.text-center span {
+		color: #641601;
+		text-decoration: underline;
+		font-weight: 500;
+	}
+
+	.dark .text-center span {
+		color: #fffe8b;
+	}
+
+	hr {
+		margin: 1.5rem 0;
+		border: 0;
+		border-top: 1px solid rgba(0, 0, 0, 0.1);
+	}
+
+	.dark hr {
+		border-top-color: rgba(255, 255, 255, 0.1);
 	}
 
 	.logo img {

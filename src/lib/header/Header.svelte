@@ -9,7 +9,9 @@
 		</picture>
 	</a>
 
-	<SearchBar />
+	<div class="hidden">
+		<SearchBar />
+	</div>
 </header>
 
 <style>

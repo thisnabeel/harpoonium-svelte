@@ -8,11 +8,12 @@
 	import Api from '$lib/api/api.js';
 	import { csrf_token } from '$lib/stores/api.js';
 	import { user } from '$lib/stores/user';
+	import { page } from '$app/stores';
+	import { theme } from '$lib/stores/main';
 
 	import GaragePopUp from '$lib/pop-ups/Garage.svelte';
 
 	import Creds from '$lib/nav-buttons/creds/Creds.svelte';
-	import { theme } from '$lib/stores/main';
 
 	let user_signed_in;
 	user.subscribe((value) => (user_signed_in = value));
@@ -46,21 +47,23 @@
 	{/if}
 </svelte:head>
 
-<main>
-	{#if !pageLoaded}
-		<picture class="logo">
-			<img src="/logo-light.png" alt="harpoonium Logo" />
-		</picture>
-	{:else if $user}
-		<NavButtons />
-		<Header />
-		<slot />
-	{:else}
-		<div class="creds-wrapper">
-			<Creds />
-		</div>
-	{/if}
-</main>
+<div class="app {$theme}">
+	<main>
+		{#if !pageLoaded}
+			<picture class="logo">
+				<img src="/logo-light.png" alt="harpoonium Logo" />
+			</picture>
+		{:else if $user}
+			<NavButtons />
+			<Header />
+			<slot />
+		{:else}
+			<div class="creds-wrapper">
+				<Creds />
+			</div>
+		{/if}
+	</main>
+</div>
 
 <Modals>
 	<div slot="backdrop" class="backdrop" transition:fade on:click={closeModal} />
@@ -72,15 +75,45 @@
 	<p>visit <a href="https://kit.svelte.dev">kit.svelte.dev</a> to learn SvelteKit</p>
 </footer> -->
 <style>
+	.app {
+		min-height: 100vh;
+		background-image: url('/cabin-bg.png');
+		background-size: cover;
+		background-position: center;
+		background-repeat: no-repeat;
+		background-attachment: fixed;
+		position: relative;
+	}
+
+	.app::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background-color: rgba(0, 0, 0, 0.3);
+		z-index: 1;
+	}
+
+	.app.dark::before {
+		background-color: rgba(0, 0, 0, 0.7);
+	}
+
 	main {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		/* padding: 1rem; */
-		width: 100%;
-		max-width: 1024px;
-		margin: 0 auto;
-		box-sizing: border-box;
+		position: relative;
+		z-index: 2;
+		min-height: 100vh;
+	}
+
+	.dark {
+		color-scheme: dark;
+	}
+
+	@media (max-width: 768px) {
+		.app {
+			background-attachment: scroll;
+		}
 	}
 
 	footer {

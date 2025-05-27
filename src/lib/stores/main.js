@@ -38,4 +38,4 @@ export const signIn = () => {
 	selectedChapter.set(null);
 };
 
-export const theme = writable('default');
+export const theme = writable('dark');

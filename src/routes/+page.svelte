@@ -6,6 +6,7 @@
 	import { onMount } from 'svelte';
 
 	import Quiz from '$lib/components/Chapters/Tabs/Quiz/Quiz.svelte';
+	import TweetList from '$lib/components/Classics/TweetList.svelte';
 
 	const fetchPopularWonders = async () => {
 		const response = await Api.get('/museum.json');
@@ -29,9 +30,10 @@
 </svelte:head>
 
 <div class="quizzes">
-	{#each quizzes as quiz}
+	<!-- {#each quizzes as quiz}
 		<Quiz {quiz} editable={false} linkable={true} />
-	{/each}
+	{/each} -->
+	<TweetList />
 </div>
 
 <!-- <Home /> -->
