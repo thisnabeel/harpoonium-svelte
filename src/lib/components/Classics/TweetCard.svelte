@@ -5,13 +5,16 @@
 		body: '',
 		book_title: '',
 		chapter_title: '',
-		username: ''
+		username: '',
+		position: 1
 	};
 
 	function copyLink() {
 		const tweetUrl = window.location.href;
 		navigator.clipboard.writeText(tweetUrl);
 	}
+
+	$: isBlurred = tweet.chapter_position > 1;
 </script>
 
 <div class="tweet-card {$theme}">
@@ -27,7 +30,14 @@
 				<span>•••</span>
 			</div>
 		</div>
-		<p class="tweet-body">{tweet.body}</p>
+		<p class="tweet-body" class:blurred={isBlurred}>
+			{tweet.body}
+			{#if isBlurred}
+				<div class="blur-overlay">
+					<span>Unlock this tweet by reading previous chapters</span>
+				</div>
+			{/if}
+		</p>
 		<div class="book-title-container">
 			<svg viewBox="0 0 24 24" width="16" height="16" class="book-icon">
 				<path
@@ -156,6 +166,31 @@
 		white-space: pre-wrap;
 		width: auto;
 		-webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+	}
+
+	.tweet-body.blurred {
+		filter: blur(5px);
+		user-select: none;
+		position: relative;
+	}
+
+	.blur-overlay {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(0, 0, 0, 0.5);
+		color: white;
+		font-size: 0.9rem;
+		text-align: center;
+		padding: 1rem;
+		border-radius: 8px;
+		backdrop-filter: blur(2px);
+		z-index: 1;
 	}
 
 	.book-title-container {

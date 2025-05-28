@@ -7,6 +7,7 @@
 
 	import Quiz from '$lib/components/Chapters/Tabs/Quiz/Quiz.svelte';
 	import TweetList from '$lib/components/Classics/TweetList.svelte';
+	import BookScroller from '$lib/components/Classics/BookScroller.svelte';
 
 	const fetchPopularWonders = async () => {
 		const response = await Api.get('/museum.json');
@@ -22,6 +23,12 @@
 	onMount(async function () {
 		fetchQuestions();
 	});
+
+	let selectedBook = null;
+
+	function handleBookSelect(event) {
+		selectedBook = event.detail;
+	}
 </script>
 
 <svelte:head>
@@ -30,10 +37,8 @@
 </svelte:head>
 
 <div class="quizzes">
-	<!-- {#each quizzes as quiz}
-		<Quiz {quiz} editable={false} linkable={true} />
-	{/each} -->
-	<TweetList />
+	<BookScroller on:bookSelect={handleBookSelect} />
+	<TweetList {selectedBook} />
 </div>
 
 <!-- <Home /> -->
