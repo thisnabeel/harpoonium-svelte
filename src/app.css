@@ -16,6 +16,16 @@
 	--column-margin-top: 4rem;
 }
 
+.dark .modal-content {
+	background-color: #15202b;
+}
+.dark .modal {
+	color: #fff;
+}
+
+.dark h2 {
+	color: #fff;
+}
 @font-face {
 	font-family: 'GreycliffCF-Bold';
 	src: url('/fonts/GreycliffCF-Bold.woff2') format('woff2-variations');

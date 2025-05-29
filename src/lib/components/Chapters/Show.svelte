@@ -15,6 +15,10 @@
 	let dragOver = false;
 	let uploading = false;
 	let fileInput;
+	let isEditing = false;
+	let isSaving = false;
+	let editedTitle = '';
+	let editedDescription = '';
 
 	const fetchChapter = async (slug) => {
 		chapter = await Api.get('/chapters/' + slug + '.json');
@@ -82,6 +86,30 @@
 
 	let tabs = ['Concepts', 'Research', 'Mapper', 'Writer'];
 	let activeTab = 'Concepts';
+
+	function startEditing() {
+		editedTitle = chapter.title;
+		editedDescription = chapter.description || '';
+		isEditing = true;
+	}
+
+	async function saveChanges() {
+		if (!editedTitle.trim()) return;
+
+		isSaving = true;
+		try {
+			const response = await Api.put(`/chapters/${chapter.id}`, {
+				title: editedTitle.trim(),
+				description: editedDescription.trim()
+			});
+			chapter = response;
+			isEditing = false;
+		} catch (error) {
+			console.error('Failed to update chapter:', error);
+			alert('Failed to save changes. Please try again.');
+		}
+		isSaving = false;
+	}
 </script>
 
 <section class={'wrapper ' + $theme}>
@@ -131,7 +159,48 @@
 		on:change={handleFileSelect}
 	/>
 
-	<h1 class="title">{chapter.title}</h1>
+	<div class="title-section">
+		{#if $user?.admin && isEditing}
+			<div class="edit-form">
+				<input
+					type="text"
+					bind:value={editedTitle}
+					placeholder="Chapter title"
+					class="edit-title"
+				/>
+				<textarea
+					bind:value={editedDescription}
+					placeholder="Chapter description (optional)"
+					class="edit-description"
+					rows="3"
+				/>
+				<div class="edit-actions">
+					<button
+						class="save-button"
+						on:click={saveChanges}
+						disabled={isSaving || !editedTitle.trim()}
+					>
+						{isSaving ? 'Saving...' : 'Save Changes'}
+					</button>
+					<button class="cancel-button" on:click={() => (isEditing = false)} disabled={isSaving}>
+						Cancel
+					</button>
+				</div>
+			</div>
+		{:else}
+			<h1 class="title">
+				{chapter.title}
+				{#if $user?.admin}
+					<button class="edit-button" on:click={startEditing}>
+						<i class="fas fa-pen" />
+					</button>
+				{/if}
+			</h1>
+			{#if chapter.description}
+				<p class="description">{chapter.description}</p>
+			{/if}
+		{/if}
+	</div>
 
 	{#if tabs.length > 1}
 		<div class="flex">
@@ -174,6 +243,62 @@
 </section>
 
 <style>
+	.wrapper {
+		background: #fff;
+		padding: 30px;
+		border-radius: 10px;
+		position: relative;
+	}
+
+	.dark {
+		background: #481e14;
+	}
+
+	.dark h1 {
+		color: #f2613f;
+	}
+
+	.drop-zone {
+		width: 100%;
+		height: 200px;
+		border: 2px dashed #2f3336;
+		border-radius: 8px;
+		margin-bottom: 2rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		position: relative;
+		overflow: hidden;
+		transition: all 0.3s ease;
+	}
+
+	.tab {
+		padding: 14px;
+	}
+
+	.dark .tab {
+		color: #fff;
+	}
+
+	.tab.active {
+		background-color: #000;
+		color: #fff;
+	}
+
+	.flex {
+		display: flex;
+	}
+
+	.flex > div {
+		flex: 1 1 33%;
+		text-align: center;
+	}
+
+	.title {
+		padding: 40px 0px;
+	}
+
 	.drop-zone {
 		width: 100%;
 		height: 200px;
@@ -269,25 +394,6 @@
 		}
 	}
 
-	.tab {
-		padding: 14px;
-	}
-
-	.dark .tab {
-		color: #fff;
-	}
-	.tab.active {
-		background-color: #000;
-		color: #fff;
-	}
-	.flex {
-		display: flex;
-	}
-
-	.flex > div {
-		flex: 1 1 33%;
-		text-align: center;
-	}
 	.add-abstraction {
 		font-size: 72px;
 		position: absolute;
@@ -297,24 +403,6 @@
 		color: #ffd67f;
 		width: 0px;
 		bottom: 60px;
-	}
-
-	.title {
-		padding: 40px 0px;
-	}
-	.wrapper {
-		background: #fff;
-		padding: 30px;
-		border-radius: 10px;
-		position: relative;
-	}
-
-	.dark {
-		background: #481e14;
-	}
-
-	.dark h1 {
-		color: #f2613f;
 	}
 
 	.abstractions {
@@ -340,6 +428,154 @@
 
 		.abstractions > li {
 			padding-top: 55px;
+		}
+	}
+
+	.title-section {
+		margin: 1.5rem 0;
+	}
+
+	.title {
+		font-size: 2rem;
+		font-weight: 700;
+		margin: 0;
+		color: var(--text-color);
+		text-align: center;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 1rem;
+	}
+
+	.description {
+		text-align: center;
+		color: #536471;
+		margin: 1rem 0;
+		line-height: 1.5;
+	}
+
+	.edit-button {
+		background: none;
+		border: none;
+		color: #536471;
+		cursor: pointer;
+		padding: 0.5rem;
+		border-radius: 50%;
+		transition: all 0.2s ease;
+	}
+
+	.edit-button:hover {
+		background: rgba(0, 0, 0, 0.05);
+		color: #1d9bf0;
+	}
+
+	.edit-form {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		max-width: 600px;
+		margin: 0 auto;
+	}
+
+	.edit-title {
+		font-size: 1.5rem;
+		padding: 0.75rem;
+		border: 2px solid #e1e8ed;
+		border-radius: 8px;
+		width: 100%;
+		font-weight: 600;
+	}
+
+	.edit-description {
+		padding: 0.75rem;
+		border: 2px solid #e1e8ed;
+		border-radius: 8px;
+		width: 100%;
+		resize: vertical;
+		font-size: 1rem;
+		line-height: 1.5;
+	}
+
+	.edit-actions {
+		display: flex;
+		gap: 1rem;
+		justify-content: flex-end;
+	}
+
+	.save-button,
+	.cancel-button {
+		padding: 0.75rem 1.5rem;
+		border-radius: 9999px;
+		border: none;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.save-button {
+		background: #1d9bf0;
+		color: white;
+	}
+
+	.save-button:hover:not(:disabled) {
+		background: #1a8cd8;
+	}
+
+	.cancel-button {
+		background: #e1e8ed;
+		color: #536471;
+	}
+
+	.cancel-button:hover:not(:disabled) {
+		background: #d1d9dd;
+	}
+
+	.save-button:disabled,
+	.cancel-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	:global(.dark) .edit-title,
+	:global(.dark) .edit-description {
+		background: #1e2732;
+		border-color: #3f4447;
+		color: #e7e9ea;
+	}
+
+	:global(.dark) .description {
+		color: #71767b;
+	}
+
+	:global(.dark) .edit-button:hover {
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+	:global(.dark) .cancel-button {
+		background: #2f3336;
+		color: #e7e9ea;
+	}
+
+	:global(.dark) .cancel-button:hover:not(:disabled) {
+		background: #3f4447;
+	}
+
+	@media (max-width: 768px) {
+		.title {
+			font-size: 1.5rem;
+		}
+
+		.edit-form {
+			padding: 0 1rem;
+		}
+
+		.edit-actions {
+			flex-direction: column;
+		}
+
+		.save-button,
+		.cancel-button {
+			width: 100%;
 		}
 	}
 </style>

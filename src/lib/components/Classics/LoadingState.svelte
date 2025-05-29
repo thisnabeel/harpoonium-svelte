@@ -4,7 +4,7 @@
 		<div class="book-page" />
 		<div class="book-page" />
 	</div>
-	<p>Loading literary tweets...</p>
+	<p>Loading literary thoughts...</p>
 </div>
 
 <style>

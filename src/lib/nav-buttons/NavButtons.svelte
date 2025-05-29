@@ -26,18 +26,18 @@
 		</aside>
 
 		<User />
-
+		<!-- 
 		<aside class="book">
 			<Button icon="fa-book" />
-		</aside>
+		</aside> -->
 
 		<aside class="news">
 			<Button icon="fa-newspaper" />
 		</aside>
 
-		<aside class="garage" on:click={openGaragePopUp}>
+		<!-- <aside class="garage" on:click={openGaragePopUp}>
 			<Button img="/icons/garage.png" href={null} bg="#e53935" />
-		</aside>
+		</aside> -->
 	{/if}
 </MediaQuery>
 
@@ -46,15 +46,11 @@
 		cursor: pointer;
 		position: absolute;
 	}
-	.user {
-		top: 40px;
-		right: 145px;
-	}
 
 	.light {
 		top: 40px;
-		right: 210px;
-		z-index: 9999999;
+		right: 115px;
+		/* z-index: 9999999; */
 	}
 
 	.book {
@@ -65,6 +61,7 @@
 	.news {
 		top: 40px;
 		left: 28px;
+		display: none;
 	}
 
 	.garage {

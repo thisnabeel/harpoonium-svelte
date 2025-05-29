@@ -6,141 +6,82 @@
 	import ErrorState from './ErrorState.svelte';
 	import { theme } from '$lib/stores/main';
 
-	let tweets = [];
-	let loading = true;
+	export let tweets = [];
+	let loading = false;
 	let error = null;
-	let page = 1;
-	let hasMore = true;
-	let sortBy = 'newest';
-
-	const TWEETS_PER_PAGE = 10;
-
-	async function fetchTweets(reset = false) {
-		// if (reset) {
-		// 	page = 1;
-		// 	tweets = [];
-		// }
-
-		// if (!hasMore || loading) return;
-
-		// loading = true;
-		// error = null;
-
-		try {
-			const response = await API.get('/chapters/classics_home');
-
-			// if (response.length < TWEETS_PER_PAGE) {
-			// 	hasMore = false;
-			// }
-
-			// tweets = reset ? response : [...tweets, ...response];
-			tweets = response;
-			page++;
-		} catch (err) {
-			error = err.message;
-		} finally {
-			loading = false;
-		}
-	}
 
 	function handleScroll(event) {
 		const element = event.target;
-		if (
-			element.scrollHeight - element.scrollTop <= element.clientHeight + 100 &&
-			!loading &&
-			hasMore
-		) {
-			fetchTweets();
-		}
+		// TODO: Implement infinite scroll if needed
 	}
-
-	function handleSortChange(event) {
-		sortBy = event.target.value;
-		fetchTweets(true);
-	}
-
-	onMount(() => {
-		fetchTweets();
-	});
 </script>
 
 <div class="tweet-list-container {$theme}">
-	<!-- <div class="header">
-		<h1>Literary Tweets</h1>
-		<select value={sortBy} on:change={handleSortChange}>
-			<option value="newest">Newest First</option>
-			<option value="oldest">Oldest First</option>
-			<option value="book">By Book Title</option>
-		</select>
-	</div> -->
-
 	<div class="tweet-list" on:scroll={handleScroll}>
-		{#each tweets as tweet}
-			<TweetCard {tweet} />
-		{/each}
-
-		{#if loading}
-			<LoadingState />
+		{#if tweets.length === 0}
+			<div class="empty-state">
+				<p>No Books in your library yet.</p>
+				<p class="subtitle">Subscribe to books to see other's thoughts here!</p>
+			</div>
+		{:else}
+			{#each tweets as tweet (tweet.id)}
+				<TweetCard {tweet} />
+			{/each}
 		{/if}
 
 		{#if error}
-			<ErrorState message={error} retryCallback={() => fetchTweets(true)} />
-		{/if}
-
-		{#if !loading && !error && tweets.length === 0}
-			<div class="empty-state">
-				<p>No literary tweets found. Check back later for more bookish thoughts!</p>
-			</div>
+			<ErrorState message={error} />
 		{/if}
 	</div>
 </div>
 
 <style>
 	.tweet-list-container {
-		/* max-width: 600px; */
 		margin: 0 auto;
 		padding: 1rem;
-	}
-
-	.header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 2rem;
-		padding: 0 1rem;
-	}
-
-	h1 {
-		font-family: 'Georgia', serif;
-		color: #1a1a1a;
-		font-size: 2rem;
-		margin: 0;
-	}
-
-	select {
-		padding: 0.5rem;
-		border: 1px solid #2f3336;
-		border-radius: 4px;
-		font-family: 'Georgia', serif;
-		background-color: white;
-		cursor: pointer;
 	}
 
 	.tweet-list {
 		height: calc(100vh - 150px);
 		overflow-y: auto;
 		padding: 1rem;
-		/* border: 1px solid #e0e0e0; */
 		border-radius: 12px;
-		/* background-color: #f8f8f8; */
 	}
 
 	.empty-state {
 		text-align: center;
-		padding: 2rem;
-		color: #666;
-		font-family: 'Georgia', serif;
-		font-style: italic;
+		padding: 3rem 2rem;
+		background: rgba(29, 155, 240, 0.05);
+		border: 1px solid rgba(29, 155, 240, 0.1);
+		border-radius: 1rem;
+		margin: 1rem;
+	}
+
+	.empty-state p {
+		font-size: 1.2rem;
+		font-weight: 500;
+		color: #1d9bf0;
+		margin: 0;
+	}
+
+	.empty-state .subtitle {
+		font-size: 1rem;
+		font-weight: normal;
+		color: #536471;
+		margin-top: 0.25rem;
+	}
+
+	:global(.dark) .empty-state {
+		background: rgba(239, 243, 244, 0.05);
+		border-color: rgba(239, 243, 244, 0.1);
+	}
+
+	:global(.dark) .empty-state p {
+		color: #1d9bf0;
+	}
+
+	:global(.dark) .empty-state .subtitle {
+		color: #71767b;
 	}
 
 	@media (max-width: 768px) {
@@ -148,16 +89,13 @@
 			padding: 0.5rem;
 		}
 
-		.header {
-			flex-direction: column;
-			gap: 1rem;
-			align-items: flex-start;
-			padding: 0 0.5rem;
-		}
-
 		.tweet-list {
 			height: calc(100vh - 200px);
 			padding: 0.5rem;
+		}
+
+		.empty-state {
+			padding: 2rem 1rem;
 		}
 	}
 </style>

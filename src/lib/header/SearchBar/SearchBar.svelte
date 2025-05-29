@@ -26,7 +26,6 @@
 
 	onMount(async function () {
 		getChapters();
-		getWonders();
 	});
 
 	const getChapters = async () => {
@@ -54,35 +53,6 @@
 		}
 		console.log('chapters', parents);
 		chaptersMap.set(parents);
-	};
-
-	const getWonders = async () => {
-		const response = await Api.get('/cached_wonders.json');
-		console.log('response', response);
-		let json = response;
-		wonders.set(json);
-		let parents = json.filter((obj) => {
-			return obj.wonder_id === null;
-		});
-		console.log('wokring', 3);
-		parents.map((wonder, index) => {
-			// Connect each Child to Parent
-			connectChildToParent(wonder);
-		});
-		function connectChildToParent(wonder) {
-			let children = json.filter((obj) => {
-				return obj.wonder_id === wonder.id;
-			});
-			wonder['wonders'] = children;
-			wonder['wonders'].map((wonder, index) => {
-				// Connect each Child to Parent
-				connectChildToParent(wonder);
-			});
-		}
-
-		// console.log("wonders", parents.filter(wonder => wonder.wonders.length !== 0))
-		// parents.filter(wonder => wonder.wonders.length !== 0)
-		wondersMap.set(parents);
 	};
 </script>
 

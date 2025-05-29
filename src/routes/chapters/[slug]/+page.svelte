@@ -30,5 +30,23 @@
 </script>
 
 {#if chapter}
-	<Chapter {chapter} />
+	<div class="chapter-container">
+		<Chapter {chapter} />
+	</div>
 {/if}
+
+<style>
+	.chapter-container {
+		width: 70%;
+		max-width: 1200px;
+		margin: 0 auto;
+		padding: 20px;
+	}
+
+	@media (max-width: 768px) {
+		.chapter-container {
+			width: 90%;
+			padding: 10px;
+		}
+	}
+</style>

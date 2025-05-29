@@ -61,7 +61,8 @@
 	}
 	.user {
 		top: 40px;
-		right: 145px;
+		/* right: 145px; */
+		right: 75px;
 	}
 
 	.settings {

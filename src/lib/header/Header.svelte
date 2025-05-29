@@ -2,14 +2,14 @@
 	import SearchBar from './SearchBar/SearchBar.svelte';
 </script>
 
-<header>
-	<a href="/">
+<header class="hidden">
+	<!-- <a href="/">
 		<picture class="logo">
 			<img src="/logo-light.png" alt="harpoonium Logo" />
 		</picture>
-	</a>
+	</a> -->
 
-	<div class="hidden">
+	<div>
 		<SearchBar />
 	</div>
 </header>

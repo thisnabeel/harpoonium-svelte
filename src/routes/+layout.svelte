@@ -1,5 +1,5 @@
 <script>
-	import Header from '$lib/header/Header.svelte';
+	import Header from '$lib/components/Header/Header.svelte';
 	import '../app.css';
 	import { Modals, closeModal } from 'svelte-modals';
 	import { fade } from 'svelte/transition';
@@ -56,10 +56,11 @@
 		{:else if $user}
 			<NavButtons />
 			<Header />
+
 			<slot />
 		{:else}
 			<div class="creds-wrapper">
-				<Creds />
+				<Creds hidePopUp={true} />
 			</div>
 		{/if}
 	</main>

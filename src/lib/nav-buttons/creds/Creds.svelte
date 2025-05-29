@@ -10,8 +10,6 @@
 	let confirmPassword;
 	export let hidePopUp;
 
-	$: console.log(username);
-
 	const authenticate = async (verb) => {
 		let response;
 		if (verb === 'signIn') {
@@ -37,20 +35,48 @@
 			if (hidePopUp) {
 				hidePopUp();
 			}
-			// goto(`/`);
 		}
 	};
 
-	let view = 'signIn';
+	let view = 'select'; // 'select', 'signIn', or 'signUp'
 </script>
 
 <picture class="logo">
 	<img src="/logo-light.png" alt="harpoonium Logo" />
 </picture>
+<div class="cta-header {$theme}">
+	<h1>Slow down. Read together.</h1>
+	<!-- <p>
+		In a world of endless scrolls and fleeting content, we’re losing the art of slowing down and
+		truly absorbing stories. EmberBind was created as a gentle rebellion — a cozy space where
+		reading becomes social without becoming rushed. Here, you move at the pace of a chapter, not a
+		trend. You sit with a sentence, not just skim a caption. And you’re surrounded by fellow readers
+		who aren’t racing to the end, but enjoying the journey with you. We need EmberBind because deep
+		stories deserve deep attention — and so do you.
+	</p> -->
+	<p>a gentle rebellion — a cozy space where reading becomes social without becoming rushed</p>
+</div>
 
-{#if view === 'signIn'}
+{#if view === 'select'}
+	<div class="selection-screen {$theme}">
+		<div class="options-container">
+			<div class="option" on:click={() => (view = 'signIn')} role="button" tabindex="0">
+				<img src="/sign-in.png" alt="Sign In" class="option-img" />
+
+				<p>Already have an account? Sign in to continue your journey.</p>
+			</div>
+			<div class="option" on:click={() => (view = 'signUp')} role="button" tabindex="0">
+				<img src="/sign-up.png" alt="Sign Up" class="option-img" />
+				<p>New Here? Create an account to start your adventure.</p>
+			</div>
+		</div>
+	</div>
+{:else if view === 'signIn'}
 	<div class="form {$theme}">
-		<img src="/sign-in.png" alt="" class="sign-up-img creds-header-img" />
+		<div class="form-header">
+			<button class="back-btn" on:click={() => (view = 'select')}>←</button>
+			<img src="/sign-in.png" alt="" class="creds-header-img" />
+		</div>
 
 		<div class="input-group">
 			<label>Username or Email:</label>
@@ -63,14 +89,13 @@
 		</div>
 
 		<button on:click={() => authenticate('signIn')}>Log In</button>
-		<hr />
-		<div class="text-center" on:click={() => (view = 'signUp')}>
-			<span>Sign Up</span>
-		</div>
 	</div>
 {:else}
 	<div class="form {$theme}">
-		<img src="/sign-up.png" alt="" class="sign-up-img creds-header-img" />
+		<div class="form-header">
+			<button class="back-btn" on:click={() => (view = 'select')}>←</button>
+			<img src="/sign-up.png" alt="" class="creds-header-img" />
+		</div>
 
 		<div class="input-group">
 			<label>Email:</label>
@@ -93,17 +118,116 @@
 		</div>
 
 		<button on:click={() => authenticate('signUp')}>Sign Up</button>
-		<hr />
-		<div class="text-center" on:click={() => (view = 'signIn')}>
-			<span>Log In</span>
-		</div>
 	</div>
 {/if}
 
 <style>
-	.dark.form {
+	.dark.form,
+	.dark.selection-screen {
 		background: transparent;
 		border: 9px solid #000000;
+	}
+
+	.selection-screen {
+		max-width: 800px;
+		margin: 30px auto;
+		background: #fff;
+		padding: 30px;
+		border-radius: 6px;
+		border: 9px solid #f6f8ff;
+	}
+
+	.options-container {
+		display: flex;
+		gap: 2rem;
+		justify-content: center;
+		align-items: stretch;
+	}
+
+	.option {
+		flex: 1;
+		padding: 2rem;
+		border-radius: 12px;
+		background: rgba(255, 255, 255, 0.1);
+		border: 2px solid #ced4da;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		text-align: center;
+	}
+
+	.dark .option {
+		border-color: #8b1e01;
+	}
+
+	.option:hover {
+		transform: translateY(-5px);
+		border-color: #fffe8b;
+		box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+	}
+
+	.dark .option:hover {
+		border-color: #f2613f;
+		box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+	}
+
+	.option h2 {
+		margin: 1rem 0;
+		color: #333;
+		font-size: 1.5rem;
+	}
+
+	.option p {
+		color: #666;
+		font-size: 0.9rem;
+		line-height: 1.4;
+	}
+
+	.dark .option h2 {
+		color: #fff;
+	}
+
+	.dark .option p {
+		color: #ccc;
+	}
+
+	.option-img {
+		width: 100%;
+		max-width: 200px;
+		height: auto;
+		margin-bottom: 1rem;
+	}
+
+	.form-header {
+		position: relative;
+		margin-bottom: 2rem;
+	}
+
+	.back-btn {
+		position: absolute;
+		left: 0;
+		top: 50%;
+		transform: translateY(-50%);
+		background: none;
+		border: none;
+		font-size: 1.5rem;
+		color: #666;
+		cursor: pointer;
+		padding: 0.5rem;
+		margin: 0;
+		width: auto;
+	}
+
+	.dark .back-btn {
+		color: #fff;
+	}
+
+	.back-btn:hover {
+		color: #333;
+		background: none;
+	}
+
+	.dark .back-btn:hover {
+		color: #f2613f;
 	}
 
 	.dark.form input {
@@ -139,6 +263,7 @@
 		margin: 10px auto;
 		display: block;
 		width: 100%;
+		max-width: 200px;
 	}
 
 	.input-group {
@@ -198,36 +323,58 @@
 		border-color: #fffd6b;
 	}
 
-	.text-center {
-		text-align: center;
-		margin-top: 1rem;
-		cursor: pointer;
-	}
-
-	.text-center span {
-		color: #641601;
-		text-decoration: underline;
-		font-weight: 500;
-	}
-
-	.dark .text-center span {
-		color: #fffe8b;
-	}
-
-	hr {
-		margin: 1.5rem 0;
-		border: 0;
-		border-top: 1px solid rgba(0, 0, 0, 0.1);
-	}
-
-	.dark hr {
-		border-top-color: rgba(255, 255, 255, 0.1);
-	}
-
 	.logo img {
 		margin: 0 auto;
 		margin-top: 30px;
 		display: block;
 		max-width: 200px;
+	}
+
+	@media (max-width: 768px) {
+		.selection-screen {
+			margin: 20px;
+			padding: 20px;
+		}
+
+		.options-container {
+			flex-direction: column;
+			gap: 1rem;
+		}
+
+		.option {
+			padding: 1.5rem;
+		}
+
+		.option-img {
+			max-width: 150px;
+		}
+	}
+
+	.cta-header {
+		max-width: 800px;
+		margin: 30px auto;
+		text-align: center;
+		padding: 2rem 1rem;
+		background: transparent;
+	}
+
+	.cta-header h1 {
+		font-family: GreyCliffCF-Regular;
+		font-size: 2.5rem;
+		font-weight: 700;
+		color: #333;
+		margin: 0;
+		line-height: 1.2;
+	}
+
+	.dark h1,
+	.dark p {
+		color: #fff;
+	}
+
+	@media (max-width: 768px) {
+		.cta-header h1 {
+			font-size: 1.8rem;
+		}
 	}
 </style>
