@@ -9,12 +9,13 @@
 	import Abstraction from '$lib/components/Abstraction/Abstraction.svelte';
 	import Quizzes from './Tabs/Quiz/Quizzes.svelte';
 	import Mapper from './Mapper/Mapper.svelte';
+	import ChapterBody from './Tabs/Body/ChapterBody.svelte';
 
 	export let chapter;
 
 	let dragOver = false;
 	let uploading = false;
-	let fileInput;
+	let fileInput = null;
 	let isEditing = false;
 	let isSaving = false;
 	let editedTitle = '';
@@ -36,7 +37,7 @@
 		});
 		console.log(response);
 		console.log('fetch chapter', chapter);
-		fetchChapter(chapter.id);
+		fetchChapter(chapter.slug || '');
 	};
 
 	async function handleImageUpload(file) {
@@ -80,12 +81,12 @@
 	}
 
 	function handleFileSelect(event) {
-		const file = event.target?.files[0];
+		const file = event.target?.files?.[0];
 		if (file) handleImageUpload(file);
 	}
 
-	let tabs = ['Concepts', 'Research', 'Mapper', 'Writer'];
-	let activeTab = 'Concepts';
+	let tabs = ['Body', 'Concepts', 'Research', 'Mapper', 'Writer'];
+	let activeTab = null;
 
 	function startEditing() {
 		editedTitle = chapter.title;
@@ -120,7 +121,7 @@
 		on:dragover={handleDragOver}
 		on:dragleave={handleDragLeave}
 		on:drop={handleDrop}
-		on:click={() => fileInput.click()}
+		on:click={() => fileInput?.click()}
 	>
 		{#if uploading}
 			<div class="upload-overlay">
@@ -221,7 +222,7 @@
 					<Abstraction
 						{chapter}
 						user={$user}
-						refresh={() => fetchChapter(chapter.id)}
+						refresh={() => fetchChapter(chapter.slug || '')}
 						{abstraction}
 					/>
 				</li>
@@ -229,16 +230,14 @@
 		</ul>
 	{/if}
 
-	{#if activeTab === 'Concepts'}
+	{#if activeTab === 'Body'}
+		<ChapterBody {chapter} />
+	{:else if activeTab === 'Concepts'}
 		<Quizzes {chapter} user={$user} />
-	{/if}
-
-	{#if activeTab === 'Research'}
+	{:else if activeTab === 'Research'}
 		<Research {chapter} user={$user} />
-	{/if}
-
-	{#if activeTab === 'Mapper'}
-		<Mapper parentId={chapter.id} />
+	{:else if activeTab === 'Mapper'}
+		<Mapper chapterId={chapter.id} />
 	{/if}
 </section>
 

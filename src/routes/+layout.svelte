@@ -10,6 +10,7 @@
 	import { user } from '$lib/stores/user';
 	import { page } from '$app/stores';
 	import { theme } from '$lib/stores/main';
+	import '@fortawesome/fontawesome-free/css/all.min.css';
 
 	import GaragePopUp from '$lib/pop-ups/Garage.svelte';
 

@@ -1,331 +1,245 @@
 <script>
 	import { onMount } from 'svelte';
-	import Api from '$lib/api/api.js';
-	import { selectChapter, chaptersMap, wondersMap } from '$lib/stores/main';
-	import Row from './Row.svelte';
-	import { selectedChapter } from '$lib/stores/chapters/mapper';
-	import { listen } from 'svelte/internal';
-	import { user } from '$lib/stores/user';
+	import Api from '$lib/api/api';
+	import { theme } from '$lib/stores/main';
+	import { goto } from '$app/navigation';
 
-	export let parentId = null;
-	let chapters;
-	let newChapterTitle = '';
-	chaptersMap.subscribe((value) => {
-		console.log('chaptersMap', value);
+	export let chapterId;
+	let isLoading = true;
+	let error = null;
+	let book = null;
+	let currentChapter = null;
+	let tableOfContents = [];
 
-		if (parentId) {
-			parent = value.find((c) => c.id === parentId);
-			if (parent) {
-				chapters = parent.chapters;
+	onMount(async () => {
+		try {
+			const response = await Api.get(`/chapters/${chapterId}/nested_chapters`);
+			if (response.error) {
+				throw new Error(response.error);
 			}
-			console.log('map', chapters);
-		} else {
-			chapters = value;
+			book = response.book;
+			currentChapter = response.current_chapter;
+			tableOfContents = response.table_of_contents;
+		} catch (err) {
+			error = 'Failed to load chapter structure';
+			console.error('Failed to load chapter structure:', err);
+		} finally {
+			isLoading = false;
 		}
 	});
 
-	onMount(() => {
-		// Add event listener for arrow key presses
-		window.addEventListener('keydown', move);
-	});
-
-	const findNode = (root, target) => {
-		if (!root) {
-			return null;
-		}
-
-		if (root.id === target.id) {
-			return root;
-		}
-
-		for (let chapter of root.chapters) {
-			const foundChapter = findNode(chapter, target);
-			if (foundChapter) {
-				return foundChapter;
-			}
-		}
-
-		return null;
-	};
-
-	const findParentNode = (root, target) => {
-		if (!root) {
-			return null;
-		}
-		if (!target) {
-			return null;
-		}
-		if (root.id === target.chapter_id) {
-			return root;
-		}
-
-		for (let chapter of root.chapters) {
-			const foundChapter = findParentNode(chapter, target);
-			if (foundChapter) {
-				return foundChapter;
-			}
-		}
-
-		return null;
-	};
-
-	async function addChapter() {
-		if (newChapterTitle.length > 0) {
-			if ($selectedChapter && $selectedChapter.id) {
-				const clone = [...chapters];
-
-				const node = findNode(
-					{
-						id: -1,
-						chapters: clone
-					},
-					$selectedChapter
-				);
-
-				const response = await Api.post('/chapters.json', {
-					title: newChapterTitle,
-					chapter_id: $selectedChapter.id || parentId,
-					position: node.chapters.length + 1,
-					user_id: $user.id
-				});
-
-				node.chapters = [...node.chapters, response];
-
-				console.log(clone);
-				chapters = clone;
-			} else {
-				const response = await Api.post('/chapters.json', {
-					title: newChapterTitle,
-					position: chapters.length + 1,
-					user_id: $user.id,
-					chapter_id: parentId
-				});
-				chapters = [...chapters, response];
-			}
-
-			newChapterTitle = '';
-		}
-	}
-
-	async function move(event) {
-		if (!$selectedChapter) {
-			return;
-		}
-		let clone = [...chapters];
-
-		// console.log('chapter', $selectedChapter);
-
-		const node = findNode(
-			{
-				id: -1,
-				chapters: clone
-			},
-			$selectedChapter
-		);
-
-		const parentNode = findParentNode(
-			{
-				id: -1,
-				chapters: clone
-			},
-			$selectedChapter
-		);
-
-		const grandparentNode = findParentNode(
-			{
-				id: -1,
-				chapters: clone
-			},
-			parentNode
-		);
-		const index = $selectedChapter.position - 1;
-		let newIndex = null;
-		let element = null;
-
-		let changed = [];
-
-		switch (event.key) {
-			case 'w':
-				console.log('up');
-
-				newIndex = index - 1;
-
-				if (parentNode) {
-					if (!parentNode.chapters[newIndex]) {
-						return;
-					}
-
-					element = parentNode.chapters.splice(index, 1)[0];
-					parentNode.chapters.splice(newIndex, 0, element);
-					changed = [...changed, parentNode];
-				} else {
-					element = clone.splice(index, 1)[0];
-					clone.splice(newIndex, 0, element);
-					changed = [...changed, null];
-				}
-				break;
-			case 's':
-				console.log('down');
-
-				newIndex = index + 1;
-
-				if (parentNode) {
-					if (!parentNode.chapters[newIndex]) {
-						return;
-					}
-					// console.log(index, parentNode.chapters[index]);
-					element = parentNode.chapters.splice(index, 1)[0];
-					parentNode.chapters.splice(newIndex, 0, element);
-					changed = [...changed, parentNode];
-				} else {
-					element = clone.splice(index, 1)[0];
-					clone.splice(newIndex, 0, element);
-					changed = [...changed, null];
-				}
-				break;
-			case 'a':
-				if (!parentNode) {
-					return;
-				}
-
-				element = parentNode.chapters.splice(index, 1)[0];
-
-				if (grandparentNode) {
-					element.chapter_id = grandparentNode.id;
-					grandparentNode.chapters = [...grandparentNode.chapters, element];
-					changed = [...changed, grandparentNode];
-				} else {
-					element.chapter_id = parentId;
-					clone = [...clone, element];
-					changed = [...changed, parentId];
-				}
-
-				// chapters = clone;
-
-				break;
-			case 'd':
-				// if (clone[index - 1]) {
-				// 	return;
-				// }
-				if (!parentNode) {
-					// console.log(index);
-					element = clone.splice(index, 1)[0];
-					if (!clone[index - 1]) {
-						return;
-					}
-					element.chapter_id = clone[index - 1].id;
-					clone[index - 1].chapters = [...clone[index - 1].chapters, element];
-					changed = [...changed, null, clone[index - 1]];
-					console.log('movedRight', 'First Nest');
-				} else {
-					element = parentNode.chapters.splice(index, 1)[0];
-					if (!parentNode.chapters[index - 1]) {
-						return;
-					}
-					element.chapter_id = parentNode.chapters[index - 1].id;
-					parentNode.chapters[index - 1].chapters = [
-						...parentNode.chapters[index - 1].chapters,
-						element
-					];
-					changed = [...changed, null, parentNode, parentNode.chapters[index - 1]];
-					console.log('movedRight', 'Go Deeper In');
-				}
-
-				break;
-			default:
-				return;
-		}
-
-		order(clone, changed);
-	}
-
-	async function remove(chapter) {
-		if (!$selectedChapter) {
-			return;
-		}
-
-		await Api.delete(`/chapters/${$selectedChapter.id}.json`);
-		const clone = [...chapters];
-
-		// console.log('chapter', $selectedChapter);
-
-		const node = findNode(
-			{
-				id: -1,
-				chapters: clone
-			},
-			$selectedChapter
-		);
-
-		const parentNode = findParentNode(
-			{
-				id: -1,
-				chapters: clone
-			},
-			$selectedChapter
-		);
-		const index = $selectedChapter.position - 1;
-
-		if (parentNode) {
-			parentNode.chapters.splice(index, 1)[0];
-			order(clone, [parentNode]);
-		} else {
-			clone.splice(index, 1)[0];
-			order(clone, null);
-		}
-	}
-
-	async function order(clone, changed) {
-		for (let node of changed) {
-			console.log('node', node);
-			if (node === null) {
-				let i = 0;
-				for (let el of clone) {
-					el.position = i + 1;
-					Api.put(`/chapters/${el.id}.json`, {
-						position: el.position,
-						chapter_id: el.chapter_id
-					});
-					i++;
-				}
-			}
-			let i = 0;
-			if (!node) {
-			} else {
-				for (let el of node.chapters) {
-					el.position = i + 1;
-					Api.put(`/chapters/${el.id}.json`, {
-						position: el.position,
-						chapter_id: el.chapter_id
-					});
-					i++;
-				}
-			}
-		}
-
-		chapters = clone;
+	function getIndentLevel(position) {
+		return position > 1 ? 1 : 0; // Simple indentation for now
 	}
 </script>
 
-<div class="input-group mb-3">
-	<input
-		type="text"
-		class="form-control"
-		placeholder="Add Chapter"
-		aria-label="Add Chapter"
-		aria-describedby="basic-addon2"
-		bind:value={newChapterTitle}
-	/>
-	<div class="input-group-append" on:click={addChapter}>
-		<div class="btn btn-info">Add</div>
-	</div>
+<div class="mapper {$theme}">
+	{#if isLoading}
+		<div class="loading">
+			<div class="spinner" />
+			<span>Loading chapter structure...</span>
+		</div>
+	{:else if error}
+		<div class="error">
+			{error}
+		</div>
+	{:else}
+		<div class="chapter-tree">
+			<!-- Book title -->
+			<div class="book-title">
+				<h3>{book.title}</h3>
+			</div>
+
+			<!-- Table of Contents -->
+			{#each tableOfContents as chapter}
+				<div
+					class="chapter {chapter.id === currentChapter.id ? 'current' : ''}"
+					style="padding-left: {getIndentLevel(chapter.position) * 20}px"
+				>
+					<div class="chapter-info">
+						<span class="position">Chapter {chapter.position}</span>
+						<span class="title">{chapter.title}</span>
+					</div>
+					<button
+						class="btn btn-warning visit-btn"
+						on:click={() => goto(`/chapters/${chapter.id}`)}
+					>
+						<i class="fas fa-link" />
+					</button>
+				</div>
+			{/each}
+		</div>
+	{/if}
 </div>
 
-{#each chapters || [] as chapter}
-	<ul class="clean-list">
-		<Row item={chapter} {remove} type="chapter" {move} />
-	</ul>
-{/each}
-
 <style>
+	.mapper {
+		padding: 1rem;
+		background: white;
+		border-radius: 8px;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+	}
+
+	.dark.mapper {
+		background: #1e2732;
+	}
+
+	.book-title {
+		margin-bottom: 1.5rem;
+		padding-bottom: 1rem;
+		border-bottom: 1px solid #e1e8ed;
+	}
+
+	.dark .book-title {
+		border-bottom-color: #3f4447;
+	}
+
+	.book-title h3 {
+		margin: 0;
+		color: #1a1a1a;
+		font-size: 1.5rem;
+		font-weight: 600;
+	}
+
+	.dark .book-title h3 {
+		color: #e7e9ea;
+	}
+
+	.loading {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+		padding: 2rem;
+		color: #536471;
+	}
+
+	.dark .loading {
+		color: #8899a6;
+	}
+
+	.spinner {
+		width: 30px;
+		height: 30px;
+		border: 3px solid #1d9bf0;
+		border-top-color: transparent;
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+	}
+
+	.error {
+		color: #e0245e;
+		text-align: center;
+		padding: 1rem;
+	}
+
+	.dark .error {
+		color: #ff6b6b;
+	}
+
+	.chapter-tree {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.chapter {
+		position: relative;
+		padding: 0.75rem;
+		border-radius: 6px;
+		background: #f7f9f9;
+		transition: all 0.2s ease;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.chapter.current {
+		background: #e8f5fd;
+		border-left: 4px solid #1d9bf0;
+	}
+
+	.dark .chapter.current {
+		background: rgba(29, 155, 240, 0.1);
+	}
+
+	.dark .chapter {
+		background: #2f3336;
+	}
+
+	.chapter:hover {
+		background: #eff3f4;
+	}
+
+	.dark .chapter:hover {
+		background: #3f4447;
+	}
+
+	.chapter-info {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.position {
+		color: #536471;
+		font-size: 0.9rem;
+	}
+
+	.dark .position {
+		color: #8899a6;
+	}
+
+	.title {
+		font-weight: 500;
+		color: #0f1419;
+	}
+
+	.dark .title {
+		color: #e7e9ea;
+	}
+
+	.visit-btn {
+		padding: 0.4rem 0.6rem;
+		font-size: 0.9rem;
+		opacity: 0;
+		transition: opacity 0.2s ease;
+	}
+
+	.chapter:hover .visit-btn {
+		opacity: 1;
+	}
+
+	.dark .visit-btn {
+		background-color: #ffc107;
+		border-color: #ffc107;
+		color: #000;
+	}
+
+	.dark .visit-btn:hover {
+		background-color: #ffca2c;
+		border-color: #ffc720;
+		color: #000;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	@media (max-width: 768px) {
+		.mapper {
+			padding: 0.5rem;
+		}
+
+		.chapter {
+			padding: 0.5rem;
+		}
+
+		.visit-btn {
+			opacity: 1;
+		}
+	}
 </style>
