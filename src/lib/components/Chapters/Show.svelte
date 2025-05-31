@@ -10,6 +10,7 @@
 	import Quizzes from './Tabs/Quiz/Quizzes.svelte';
 	import Mapper from './Mapper/Mapper.svelte';
 	import ChapterBody from './Tabs/Body/ChapterBody.svelte';
+	import Scripts from './Tabs/Scripts/Scripts.svelte';
 
 	export let chapter;
 
@@ -85,7 +86,7 @@
 		if (file) handleImageUpload(file);
 	}
 
-	let tabs = ['Body', 'Concepts', 'Research', 'Mapper', 'Writer'];
+	let tabs = ['Body', 'Concepts', 'Research', 'Mapper', 'Writer', 'Scripts'];
 	let activeTab = null;
 
 	function startEditing() {
@@ -238,6 +239,8 @@
 		<Research {chapter} user={$user} />
 	{:else if activeTab === 'Mapper'}
 		<Mapper chapterId={chapter.id} />
+	{:else if activeTab === 'Scripts'}
+		<Scripts {chapter} />
 	{/if}
 </section>
 

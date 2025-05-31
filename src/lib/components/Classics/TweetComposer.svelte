@@ -6,24 +6,44 @@
 
 	let isModalOpen = false;
 	let step = 'book'; // 'book' | 'chapter' | 'compose'
-	let selectedBookId = '';
-	let selectedChapterId = '';
+	let selectedBookId = null;
+	let selectedChapterId = null;
 	let tweetBody = '';
 	let isSubmitting = false;
 	let error = '';
 	let requiredLength = 20;
+	let bookChapters = {
+		book: null,
+		subscribed_chapters: [],
+		all_chapters: []
+	};
 
 	$: selectedBook = subscribedBooks.find((book) => book.id === selectedBookId);
-	$: chapters = selectedBook?.subscribed_chapters || [];
-	$: canSubmit = tweetBody.length >= requiredLength && selectedChapterId && selectedBookId;
+	$: lastSubscribedChapter =
+		bookChapters.subscribed_chapters.length > 0
+			? bookChapters.subscribed_chapters[bookChapters.subscribed_chapters.length - 1]
+			: null;
+	$: nextUnsubscribedChapter = lastSubscribedChapter
+		? bookChapters.all_chapters.find(
+				(ch) => ch.position === (lastSubscribedChapter?.position || 0) + 1
+		  )
+		: null;
+	$: selectedChapter = bookChapters.all_chapters.find((ch) => ch.id === selectedChapterId);
+	$: canSubmit =
+		tweetBody.length >= requiredLength && selectedChapterId !== null && selectedBookId !== null;
 
 	function openModal() {
 		isModalOpen = true;
 		step = 'book';
-		selectedBookId = '';
-		selectedChapterId = '';
+		selectedBookId = null;
+		selectedChapterId = null;
 		tweetBody = '';
 		error = '';
+		bookChapters = {
+			book: null,
+			subscribed_chapters: [],
+			all_chapters: []
+		};
 	}
 
 	function closeModal() {
@@ -31,29 +51,50 @@
 		step = 'book';
 	}
 
-	function handleBookSelect(bookId) {
+	async function handleBookSelect(bookId) {
 		selectedBookId = bookId;
-		step = 'chapter';
+		try {
+			const response = await Api.get(`/classic_books/${bookId}/subscribed_chapters/${$user.id}`);
+			bookChapters = response;
+			step = 'chapter';
+		} catch (err) {
+			error = 'Failed to load chapters. Please try again.';
+			console.error('Error loading chapters:', err);
+		}
 	}
 
-	function handleChapterSelect(chapterId) {
-		selectedChapterId = chapterId;
+	function isChapterSelectable(chapter) {
+		if (!lastSubscribedChapter) return false;
+		return (
+			chapter.subscription_status === 'active' ||
+			chapter.position === lastSubscribedChapter.position + 1
+		);
+	}
+
+	function handleChapterSelect(chapter) {
+		if (!isChapterSelectable(chapter)) return;
+		selectedChapterId = chapter.id;
 		step = 'compose';
 	}
 
 	function goBack() {
 		if (step === 'chapter') {
 			step = 'book';
-			selectedBookId = '';
+			selectedBookId = null;
+			bookChapters = {
+				book: null,
+				subscribed_chapters: [],
+				all_chapters: []
+			};
 		} else if (step === 'compose') {
 			step = 'chapter';
-			selectedChapterId = '';
+			selectedChapterId = null;
 			tweetBody = '';
 		}
 	}
 
 	async function handleSubmit() {
-		if (!canSubmit) return;
+		if (!canSubmit || selectedChapterId === null) return;
 
 		isSubmitting = true;
 		error = '';
@@ -62,7 +103,7 @@
 			await Api.post('/tweets', {
 				body: tweetBody,
 				user_id: $user.id,
-				chapter_id: parseInt(selectedChapterId)
+				chapter_id: selectedChapterId
 			});
 
 			closeModal();
@@ -117,14 +158,36 @@
 				{:else if step === 'chapter'}
 					<div class="chapter-selection">
 						<div class="selected-book">
-							<img src={selectedBook.image_url} alt={selectedBook.title} />
-							<h3>{selectedBook.title}</h3>
+							<img src={bookChapters.book?.image_url} alt={bookChapters.book?.title} />
+							<h3>{bookChapters.book?.title}</h3>
 						</div>
+						{#if error}
+							<div class="error-message">{error}</div>
+						{/if}
 						<div class="chapter-list">
-							{#each chapters as chapter}
-								<button class="chapter-item" on:click={() => handleChapterSelect(chapter.id)}>
-									<span class="chapter-number">Chapter {chapter.number}</span>
-									<span class="chapter-title">{chapter.title}</span>
+							{#each bookChapters.all_chapters as chapter}
+								{@const isSelectable = isChapterSelectable(chapter)}
+								<button
+									class="chapter-item"
+									class:subscribed={chapter.subscription_status === 'active'}
+									class:selectable={isSelectable}
+									class:unselectable={!isSelectable}
+									on:click={() => handleChapterSelect(chapter)}
+									disabled={!isSelectable}
+								>
+									<div class="chapter-status">
+										{#if chapter.subscription_status === 'active'}
+											<i class="fas fa-check-circle" />
+										{:else if chapter === nextUnsubscribedChapter}
+											<i class="fas fa-unlock" />
+										{:else}
+											<i class="fas fa-lock" />
+										{/if}
+									</div>
+									<div class="chapter-info">
+										<span class="chapter-number">Chapter {chapter.position}</span>
+										<span class="chapter-title">{chapter.title}</span>
+									</div>
 								</button>
 							{/each}
 						</div>
@@ -133,16 +196,19 @@
 					<div class="compose-section">
 						<div class="selected-content">
 							<div class="book-info">
-								<img src={selectedBook.image_url} alt={selectedBook.title} class="book-cover" />
-								<span class="book-title">{selectedBook.title}</span>
+								<img
+									src={bookChapters.book?.image_url}
+									alt={bookChapters.book?.title}
+									class="book-cover"
+								/>
+								<span class="book-title">{bookChapters.book?.title}</span>
 							</div>
 							<div class="chapter-info">
 								<span class="chapter-title">
-									{#if selectedBook.subscribed_chapters.find((c) => c.id === selectedChapterId).position}
-										#{selectedBook.subscribed_chapters.find((c) => c.id === selectedChapterId)
-											.position}
+									{#if selectedChapter?.position}
+										#{selectedChapter.position}
 									{/if}
-									{selectedBook.subscribed_chapters.find((c) => c.id === selectedChapterId).title}
+									{selectedChapter?.title}
 								</span>
 							</div>
 						</div>
@@ -278,15 +344,50 @@
 		border: none;
 		background: none;
 		cursor: pointer;
-		transition: background-color 0.2s ease;
+		transition: all 0.2s ease;
 		border-radius: 8px;
 		text-align: left;
 		width: 100%;
+		gap: 1rem;
 	}
 
 	.book-item:hover,
-	.chapter-item:hover {
+	.chapter-item.selectable:hover {
 		background-color: rgba(0, 0, 0, 0.05);
+	}
+
+	.chapter-item.subscribed {
+		background-color: rgba(29, 155, 240, 0.1);
+	}
+
+	.chapter-item.unselectable {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.chapter-status {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		flex-shrink: 0;
+	}
+
+	.chapter-status i {
+		font-size: 1.1rem;
+	}
+
+	.fa-check-circle {
+		color: #1d9bf0;
+	}
+
+	.fa-unlock {
+		color: #00ba7c;
+	}
+
+	.fa-lock {
+		color: #536471;
 	}
 
 	.book-item img {
@@ -295,6 +396,12 @@
 		border-radius: 4px;
 		margin-right: 1rem;
 		object-fit: cover;
+	}
+
+	.chapter-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
 	}
 
 	.chapter-number {
@@ -367,50 +474,6 @@
 		font-size: 0.9rem;
 	}
 
-	:global(.dark) .modal {
-		background: #15202b;
-	}
-
-	:global(.dark) .modal-header {
-		background: #15202b;
-		border-bottom-color: rgba(239, 243, 244, 0.1);
-	}
-
-	:global(.dark) .book-item:hover,
-	:global(.dark) .chapter-item:hover {
-		background-color: rgba(239, 243, 244, 0.1);
-	}
-
-	:global(.dark) textarea {
-		color: #e7e9ea;
-	}
-
-	:global(.dark) .chapter-title {
-		color: #71767b;
-	}
-
-	@media (max-width: 640px) {
-		.modal {
-			position: fixed;
-			top: 0;
-			bottom: 0;
-			left: 0;
-			right: 0;
-			width: 100%;
-			height: 100vh;
-			max-height: 100vh;
-			border-radius: 0;
-			margin: 0;
-			display: flex;
-			flex-direction: column;
-		}
-
-		.modal-content {
-			flex: 1;
-			overflow-y: auto;
-		}
-	}
-
 	.chapter-selection {
 		display: flex;
 		flex-direction: column;
@@ -439,14 +502,6 @@
 		margin: 0;
 		font-size: 1.2rem;
 		color: #333;
-	}
-
-	:global(.dark) .selected-book {
-		border-bottom-color: rgba(239, 243, 244, 0.1);
-	}
-
-	:global(.dark) .selected-book h3 {
-		color: #e7e9ea;
 	}
 
 	.selected-content {
@@ -481,24 +536,68 @@
 		max-width: 100px;
 	}
 
-	.chapter-info {
-		display: flex;
-		align-items: center;
-		flex-grow: 1;
+	:global(.dark) .modal {
+		background: #15202b;
 	}
 
-	.chapter-title {
-		font-size: 1.1rem;
-		line-height: 1.4;
-		color: #333;
+	:global(.dark) .modal-header {
+		background: #15202b;
+		border-bottom-color: rgba(239, 243, 244, 0.1);
+	}
+
+	:global(.dark) .book-item:hover,
+	:global(.dark) .chapter-item.selectable:hover {
+		background-color: rgba(239, 243, 244, 0.1);
+	}
+
+	:global(.dark) .chapter-item.subscribed {
+		background-color: rgba(29, 155, 240, 0.2);
+	}
+
+	:global(.dark) textarea {
+		color: #e7e9ea;
+	}
+
+	:global(.dark) .chapter-title {
+		color: #71767b;
+	}
+
+	:global(.dark) .selected-book {
+		border-bottom-color: rgba(239, 243, 244, 0.1);
+	}
+
+	:global(.dark) .selected-book h3 {
+		color: #e7e9ea;
 	}
 
 	:global(.dark) .selected-content {
 		border-bottom-color: rgba(239, 243, 244, 0.1);
 	}
 
-	:global(.dark) .chapter-title {
-		color: #e7e9ea;
+	:global(.dark) .fa-lock {
+		color: #71767b;
+	}
+
+	@media (max-width: 640px) {
+		.modal {
+			position: fixed;
+			top: 0;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			width: 100%;
+			height: 100vh;
+			max-height: 100vh;
+			border-radius: 0;
+			margin: 0;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.modal-content {
+			flex: 1;
+			overflow-y: auto;
+		}
 	}
 
 	@media (max-width: 480px) {
