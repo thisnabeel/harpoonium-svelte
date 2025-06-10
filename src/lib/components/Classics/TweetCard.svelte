@@ -73,12 +73,19 @@
 <style>
 	.tweet-card.dark {
 		background-color: transparent;
+		background-image: url('/backdrops/dark-plank.jpg');
+		background-size: cover;
+		background-position: center;
+		background-repeat: no-repeat;
 	}
 	.tweet-card {
+		border-radius: 10px;
+		margin-bottom: 20px;
+
 		background-color: #fff;
-		border: 1px solid #2f3336;
+		/* border: 1px solid #2f3336; */
 		/* border-radius: 12px; */
-		padding: 1.5rem;
+
 		/* margin-bottom: 1rem; */
 		transition: all 0.2s ease;
 		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -88,6 +95,11 @@
 		/* transform: translateY(-2px); */
 		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 		border-color: #d0d0d0;
+	}
+
+	.tweet-content {
+		backdrop-filter: brightness(0.4);
+		padding: 1.5rem;
 	}
 
 	.tweet-header {
@@ -250,7 +262,7 @@
 	}
 
 	@media (max-width: 768px) {
-		.tweet-card {
+		.tweet-content {
 			padding: 1rem;
 		}
 

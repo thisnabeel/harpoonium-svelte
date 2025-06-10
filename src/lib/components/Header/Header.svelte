@@ -17,6 +17,7 @@
 	import { goto } from '$app/navigation';
 	import { openModal } from 'svelte-modals';
 	import Api from '$lib/api/api';
+	import CreateBookModal from '$lib/modals/books/create.svelte';
 	// import AddBookModal from '$lib/modals/books/add.svelte';
 
 	async function handleFilter() {
@@ -40,13 +41,7 @@
 	}
 
 	async function handleGenerateBook() {
-		try {
-			Api.post('/classic_books/generate');
-			alert('Started generating a new book! This may take a few minutes.');
-		} catch (error) {
-			console.error('Failed to start book generation:', error);
-			alert('Failed to start book generation. Please try again.');
-		}
+		openModal(CreateBookModal);
 	}
 
 	$: exploreBooks = $allBooks.filter(
