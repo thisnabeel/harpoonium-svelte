@@ -11,6 +11,9 @@
 	import Mapper from './Mapper/Mapper.svelte';
 	import ChapterBody from './Tabs/Body/ChapterBody.svelte';
 	import Scripts from './Tabs/Scripts/Scripts.svelte';
+	import Inquiries from './Tabs/Research/Inquiries.svelte';
+	import Cards from './Tabs/Cards/Cards.svelte';
+	import Reader from './Tabs/Reader/Reader.svelte';
 
 	export let chapter;
 
@@ -86,7 +89,7 @@
 		if (file) handleImageUpload(file);
 	}
 
-	let tabs = ['Body', 'Concepts', 'Research', 'Mapper', 'Writer', 'Scripts'];
+	let tabs = ['Body', 'Concepts', 'Research', 'Mapper', 'Writer', 'Scripts', 'Cards', 'Reader'];
 	let activeTab = null;
 
 	function startEditing() {
@@ -236,11 +239,15 @@
 	{:else if activeTab === 'Concepts'}
 		<Quizzes {chapter} user={$user} />
 	{:else if activeTab === 'Research'}
-		<Research {chapter} user={$user} />
+		<Inquiries {chapter} user={$user} />
 	{:else if activeTab === 'Mapper'}
 		<Mapper chapterId={chapter.id} />
 	{:else if activeTab === 'Scripts'}
 		<Scripts {chapter} />
+	{:else if activeTab === 'Cards'}
+		<Cards {chapter} />
+	{:else if activeTab === 'Reader'}
+		<Reader {chapter} />
 	{/if}
 </section>
 
@@ -435,6 +442,12 @@
 
 	.title-section {
 		margin: 1.5rem 0;
+	}
+
+	.flex {
+		display: flex;
+		width: 100%;
+		overflow-x: scroll;
 	}
 
 	.title {
