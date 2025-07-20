@@ -79,7 +79,7 @@
 		}
 	};
 
-	// Generate card set using AI
+	// Generate card set from chapter body (like Reader)
 	const generateCardSet = async () => {
 		if (!chapter?.id) return;
 
@@ -87,10 +87,41 @@
 		error = null;
 
 		try {
-			const response = await Api.post(`/chapters/${chapter.id}/generate_cards_set`);
-			cardSets = [...cardSets, response];
+			// First, get the chapter body content
+			const bodyResponse = await Api.get(`/chapters/${chapter.id}/chapter_body`);
+			const content = bodyResponse.body;
+
+			if (!content || content === '<p>Start writing your chapter...</p>') {
+				error = 'No chapter content found to generate cards from';
+				return;
+			}
+
+			// Split by sentences (like Reader does)
+			const sentences = content
+				.replace(/([.!?])\s*(?=[A-Z])/g, '$1|') // Split on sentence endings followed by capital letters
+				.split('|')
+				.map((sentence) => sentence.trim())
+				.filter((sentence) => sentence.length > 10) // Filter out very short fragments
+				.map((sentence, index) => ({
+					body: sentence,
+					position: index + 1
+				}));
+
+			// Create a new card set
+			const cardSetResponse = await Api.post('/card_sets', {
+				title: `Generated from Chapter ${chapter.id}`,
+				chapter_body_id: bodyResponse.id
+			});
+
+			// Create all the cards in the set
+			await Api.post(`/card_sets/${cardSetResponse.id}/batch_create_cards`, {
+				cards: sentences
+			});
+
+			// Refresh to get the updated card set with cards
+			await fetchCardSets();
 		} catch (err) {
-			error = 'Failed to generate card set';
+			error = 'Failed to generate card set from chapter body';
 			console.error('Error generating card set:', err);
 		} finally {
 			isLoading = false;

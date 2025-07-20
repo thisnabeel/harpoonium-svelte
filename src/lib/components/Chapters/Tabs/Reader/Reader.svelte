@@ -11,9 +11,6 @@
 	let isFullscreen = false;
 	let touchStartY = 0;
 	let touchEndY = 0;
-	let isEditing = false;
-	let editingCardIndex = -1;
-	let editingContent = '';
 
 	// Split chapter body into sentence-based cards
 	const createReadingCards = async () => {
@@ -102,129 +99,186 @@
 	};
 
 	// Text editing functions
-	const startEditing = (index) => {
-		if (!user?.admin) return;
-		editingCardIndex = index;
-		editingContent = cards[index].content;
-		isEditing = true;
-	};
-
-	const saveEdit = () => {
-		if (editingCardIndex === -1) return;
-
-		const newContent = editingContent.trim();
-		if (newContent) {
-			cards[editingCardIndex].content = newContent;
-		}
-
-		stopEditing();
-	};
-
-	const stopEditing = () => {
-		isEditing = false;
-		editingCardIndex = -1;
-		editingContent = '';
-	};
-
-	const handleKeydown = (event) => {
-		if (isEditing) {
-			if (event.key === 'Enter') {
-				event.preventDefault();
-				splitCard();
-			} else if (event.key === 'Backspace' && editingContent === '') {
-				event.preventDefault();
-				joinWithPrevious();
-			} else if (event.key === 'Escape') {
-				event.preventDefault();
-				stopEditing();
-			}
-		} else {
-			if (event.key === 'ArrowRight' || event.key === ' ') {
-				event.preventDefault();
-				goToNext();
-			} else if (event.key === 'ArrowLeft') {
-				event.preventDefault();
-				goToPrevious();
-			} else if (event.key === 'Escape' && isFullscreen) {
-				event.preventDefault();
-				isFullscreen = false;
-			}
+	const saveEdit = (index, newContent) => {
+		const trimmedContent = newContent.trim();
+		if (trimmedContent) {
+			cards[index].content = trimmedContent;
 		}
 	};
 
-	const splitCard = () => {
-		if (editingCardIndex === -1) return;
+	const handleKeydown = (event, cardIndex) => {
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			const selection = window.getSelection();
+			if (selection?.rangeCount) {
+				const range = selection.getRangeAt(0);
+				const textContent = range.startContainer.textContent || '';
+				const cursorPosition = range.startOffset;
+				const afterCursor = textContent.substring(cursorPosition);
+				console.log('🔍 ENTER - Text after cursor:', `"${afterCursor}"`);
+				if (afterCursor.length > 0) {
+					console.log('✅ New Cardable');
+				}
+			}
+			splitCard(cardIndex);
+		} else if (event.key === 'Backspace') {
+			const selection = window.getSelection();
+			if (selection?.rangeCount) {
+				const range = selection.getRangeAt(0);
+				const textContent = range.startContainer.textContent || '';
+				const cursorPosition = range.startOffset;
 
+				// Check if cursor is at the beginning and there's no text before it
+				if (cursorPosition === 0) {
+					// Get the contenteditable element to check full text before cursor
+					const contentEditable = selection.anchorNode?.parentElement?.closest('[contenteditable]');
+					if (contentEditable) {
+						const fullText = contentEditable.textContent || '';
+
+						// Calculate actual cursor position in full text
+						let actualCursorPosition = 0;
+						const textNodes = [];
+						const walker = document.createTreeWalker(
+							contentEditable,
+							NodeFilter.SHOW_TEXT,
+							null,
+							false
+						);
+
+						let textNode;
+						while ((textNode = walker.nextNode())) {
+							textNodes.push(textNode);
+						}
+
+						// Find which text node we're in and calculate position
+						for (let i = 0; i < textNodes.length; i++) {
+							if (textNodes[i] === selection.anchorNode) {
+								// Add up all the text before this node
+								for (let j = 0; j < i; j++) {
+									actualCursorPosition += textNodes[j].textContent?.length || 0;
+								}
+								// Add the offset within this node
+								actualCursorPosition += selection.anchorOffset;
+								break;
+							}
+						}
+
+						const textBeforeCursor = fullText.substring(0, actualCursorPosition).trim();
+						console.log('🔍 BACKSPACE - Text before cursor:', `"${textBeforeCursor}"`);
+
+						// If there's no text before cursor, join with previous card
+						if (textBeforeCursor === '') {
+							event.preventDefault();
+							console.log('✅ Joining with previous card');
+							joinWithPrevious(cardIndex);
+						}
+					}
+				}
+			}
+		}
+	};
+
+	const splitCard = (cardIndex) => {
 		const selection = window.getSelection();
-		if (!selection.rangeCount) {
-			saveEdit();
-			return;
+		if (!selection?.rangeCount) return;
+
+		// Get the contenteditable element
+		const contentEditable = selection.anchorNode?.parentElement?.closest('[contenteditable]');
+		if (!contentEditable) return;
+
+		// Get the full text content
+		const fullText = contentEditable.textContent || '';
+
+		// Debug: Log the selection details
+		console.log('Selection debug:', {
+			anchorNode: selection.anchorNode,
+			anchorOffset: selection.anchorOffset,
+			anchorNodeText: selection.anchorNode?.textContent,
+			contentEditable: contentEditable,
+			fullText: fullText
+		});
+
+		// Try a simpler approach - use the anchorOffset directly
+		let cursorPosition = selection.anchorOffset;
+
+		// If we're not at the start, try to find the actual position
+		if (cursorPosition === 0 && fullText.length > 0) {
+			// The cursor might be at the beginning of a text node that's not the first one
+			// Let's try to find the actual position by looking at the text node's position
+			const textNodes = [];
+			const walker = document.createTreeWalker(contentEditable, NodeFilter.SHOW_TEXT, null, false);
+
+			let textNode;
+			while ((textNode = walker.nextNode())) {
+				textNodes.push(textNode);
+			}
+
+			// Find which text node we're in and calculate position
+			for (let i = 0; i < textNodes.length; i++) {
+				if (textNodes[i] === selection.anchorNode) {
+					// Add up all the text before this node
+					for (let j = 0; j < i; j++) {
+						cursorPosition += textNodes[j].textContent?.length || 0;
+					}
+					// Add the offset within this node
+					cursorPosition += selection.anchorOffset;
+					break;
+				}
+			}
 		}
 
-		const range = selection.getRangeAt(0);
-		const currentContent = editingContent.trim();
+		const beforeCursor = fullText.substring(0, cursorPosition).trim();
+		const afterCursor = fullText.substring(cursorPosition).trim();
+		console.log({ beforeCursor, afterCursor, cursorPosition, fullText });
 
-		// Get cursor position in the contenteditable div
-		const cursorPosition = range.startOffset;
-		const textContent = range.startContainer.textContent || '';
+		// Check if there's content after cursor to create a new card
+		if (afterCursor.length > 0) {
+			console.log('✅ Creating new card with content:', `"${afterCursor}"`);
+			console.log('🔍 Before cursor content:', `"${beforeCursor}"`);
 
-		if (cursorPosition === 0 || cursorPosition === textContent.length) {
-			// Cursor at start or end, just save
-			saveEdit();
-			return;
+			// Update current card with content before cursor
+			cards[cardIndex].content = beforeCursor;
+
+			// Create new card with content after cursor
+			const newCard = {
+				id: Date.now(), // Temporary ID
+				content: afterCursor,
+				position: cards[cardIndex].position + 1
+			};
+
+			// Update positions for all cards after the split
+			for (let i = cardIndex + 1; i < cards.length; i++) {
+				cards[i].position += 1;
+			}
+
+			// Insert new card right after current card
+			cards.splice(cardIndex + 1, 0, newCard);
+
+			// Move to the new card
+			currentCardIndex = cardIndex + 1;
+			console.log('✅ Moved to new card at position:', currentCardIndex + 1);
 		}
-
-		const beforeCursor = textContent.substring(0, cursorPosition).trim();
-		const afterCursor = textContent.substring(cursorPosition).trim();
-
-		if (!beforeCursor || !afterCursor) {
-			// Not enough content to split
-			saveEdit();
-			return;
-		}
-
-		// Update current card
-		cards[editingCardIndex].content = beforeCursor;
-
-		// Insert new card after current
-		const newCard = {
-			id: Date.now(), // Temporary ID
-			content: afterCursor,
-			position: cards[editingCardIndex].position + 1
-		};
-
-		// Update positions for all cards after the split
-		for (let i = editingCardIndex + 1; i < cards.length; i++) {
-			cards[i].position += 1;
-		}
-
-		cards.splice(editingCardIndex + 1, 0, newCard);
-
-		// Move to the new card
-		currentCardIndex = editingCardIndex + 1;
-		stopEditing();
 	};
 
-	const joinWithPrevious = () => {
-		if (editingCardIndex <= 0) return;
+	const joinWithPrevious = (cardIndex) => {
+		if (cardIndex <= 0) return;
 
-		const previousCard = cards[editingCardIndex - 1];
-		const currentCard = cards[editingCardIndex];
+		const previousCard = cards[cardIndex - 1];
+		const currentCard = cards[cardIndex];
 
 		// Join content
 		previousCard.content = previousCard.content + ' ' + currentCard.content;
 
 		// Remove current card
-		cards.splice(editingCardIndex, 1);
+		cards.splice(cardIndex, 1);
 
 		// Update positions for remaining cards
-		for (let i = editingCardIndex; i < cards.length; i++) {
+		for (let i = cardIndex; i < cards.length; i++) {
 			cards[i].position -= 1;
 		}
 
 		// Move to previous card
-		currentCardIndex = editingCardIndex - 1;
-		stopEditing();
+		currentCardIndex = cardIndex - 1;
 	};
 
 	// Initialize cards when chapter changes
@@ -232,17 +286,6 @@
 		createReadingCards();
 		currentCardIndex = 0;
 	}
-
-	// Add keyboard listener
-	import { onMount, onDestroy } from 'svelte';
-
-	onMount(() => {
-		window.addEventListener('keydown', handleKeydown);
-	});
-
-	onDestroy(() => {
-		window.removeEventListener('keydown', handleKeydown);
-	});
 </script>
 
 <div class="reader-container {$theme}">
@@ -276,32 +319,20 @@
 		<div class="reader-content">
 			<div class="card-container">
 				<div class="reading-card">
-					{#if isEditing && editingCardIndex === currentCardIndex}
-						<div class="card-content editing">
-							<div
-								class="edit-content"
-								contenteditable="true"
-								bind:innerHTML={editingContent}
-								on:blur={saveEdit}
-								on:keydown={handleKeydown}
-								placeholder="Edit card content..."
-								autofocus
-							/>
-						</div>
-						<div class="card-footer">
-							<span class="card-number">{cards[currentCardIndex].position}</span>
-							<div class="edit-hint">
-								Press Enter to split • Backspace at start to join • Escape to cancel
-							</div>
-						</div>
-					{:else}
-						<div class="card-content clickable" on:click={() => startEditing(currentCardIndex)}>
-							{@html cards[currentCardIndex].content}
-						</div>
-						<div class="card-footer">
-							<span class="card-number">{cards[currentCardIndex].position}</span>
-						</div>
-					{/if}
+					<div class="card-content">
+						<div
+							class="edit-content"
+							contenteditable="true"
+							bind:innerHTML={cards[currentCardIndex].content}
+							on:blur={(e) => saveEdit(currentCardIndex, e.target.innerHTML)}
+							on:keydown={(e) => handleKeydown(e, currentCardIndex)}
+							placeholder="Edit card content..."
+						/>
+					</div>
+					<div class="card-footer">
+						<span class="card-number">{cards[currentCardIndex].position}</span>
+						<div class="edit-hint">Press Enter to split • Backspace at start to join</div>
+					</div>
 				</div>
 			</div>
 
@@ -400,6 +431,7 @@
 		padding: 1rem;
 		max-width: 800px;
 		margin: 0 auto;
+		position: relative;
 	}
 
 	.reader-header {
@@ -734,17 +766,28 @@
 	@media (max-width: 768px) {
 		.reader-container {
 			padding: 0.5rem;
+			max-width: 100%;
 		}
 
 		.reader-header {
 			flex-direction: column;
 			gap: 1rem;
 			align-items: stretch;
+			margin-bottom: 1rem;
+		}
+
+		.reader-header h2 {
+			font-size: 1.2rem;
+		}
+
+		.progress-info {
+			font-size: 1rem;
 		}
 
 		.reading-card {
 			padding: 1.5rem;
-			margin: 0 0.5rem;
+			margin: 0;
+			border-radius: 8px;
 		}
 
 		.card-content {
@@ -759,15 +802,25 @@
 		.nav-button {
 			width: 100%;
 			min-width: auto;
+			padding: 0.75rem;
 		}
 
 		.card-thumbnails {
 			gap: 0.25rem;
+			justify-content: center;
 		}
 
 		.thumbnail-button {
 			width: 35px;
 			height: 35px;
+			font-size: 0.8rem;
+		}
+
+		.card-navigation {
+			margin-top: 1rem;
+		}
+
+		.nav-hint {
 			font-size: 0.8rem;
 		}
 	}
@@ -809,9 +862,12 @@
 		justify-content: center;
 		font-size: 1.2rem;
 		transition: all 0.2s ease;
+		-webkit-tap-highlight-color: transparent;
+		touch-action: manipulation;
 	}
 
-	.close-button:hover {
+	.close-button:hover,
+	.close-button:active {
 		background: rgba(0, 0, 0, 0.7);
 		transform: scale(1.1);
 	}
@@ -907,6 +963,7 @@
 
 		.fullscreen-card {
 			padding: 2rem;
+			max-width: 95vw;
 		}
 
 		.card-text {
@@ -920,6 +977,16 @@
 		.progress-dot {
 			width: 10px;
 			height: 10px;
+		}
+
+		.close-button {
+			width: 60px;
+			height: 60px;
+			font-size: 1.5rem;
+		}
+
+		.fullscreen-header {
+			padding: 1.5rem;
 		}
 	}
 </style>

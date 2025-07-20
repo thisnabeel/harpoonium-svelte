@@ -5,33 +5,8 @@
 	export let user;
 	export let onDelete;
 	export let onUpdate;
-
-	let isEditing = false;
-	let editedBody = card.body;
-
-	// Start editing card
-	const startEditing = () => {
-		editedBody = card.body;
-		isEditing = true;
-	};
-
-	// Save card changes
-	const saveChanges = async () => {
-		if (!editedBody.trim()) return;
-
-		try {
-			await onUpdate({ body: editedBody.trim() });
-			isEditing = false;
-		} catch (err) {
-			console.error('Failed to update card:', err);
-		}
-	};
-
-	// Cancel editing
-	const cancelEditing = () => {
-		editedBody = card.body;
-		isEditing = false;
-	};
+	export let onKeydown;
+	export let onSaveContent;
 
 	// Handle delete
 	const handleDelete = () => {
@@ -43,37 +18,22 @@
 
 <div class="card {$theme}">
 	<div class="card-content">
-		{#if isEditing && user?.admin}
-			<textarea
-				bind:value={editedBody}
-				class="body-input"
-				rows="3"
-				placeholder="Enter card content..."
+		<div class="card-body">
+			<div
+				class="edit-content"
+				contenteditable="true"
+				bind:innerHTML={card.body}
+				on:blur={(e) => onSaveContent && onSaveContent(card.id, e.target.innerHTML)}
+				on:keydown={(e) => onKeydown && onKeydown(e, card)}
+				placeholder="Edit card content..."
 			/>
-			<div class="edit-actions">
-				<button class="save-button" on:click={saveChanges} disabled={!editedBody.trim()}>
-					<i class="fas fa-save" />
-					Save
-				</button>
-				<button class="cancel-button" on:click={cancelEditing}>
-					<i class="fas fa-times" />
-					Cancel
+		</div>
+		{#if user?.admin}
+			<div class="card-actions">
+				<button class="delete-button" on:click={handleDelete}>
+					<i class="fas fa-trash" />
 				</button>
 			</div>
-		{:else}
-			<div class="card-body">
-				{card.body}
-			</div>
-			{#if user?.admin}
-				<div class="card-actions">
-					<button class="edit-button" on:click={startEditing}>
-						<i class="fas fa-edit" />
-					</button>
-					<button class="delete-button" on:click={handleDelete}>
-						<i class="fas fa-trash" />
-					</button>
-				</div>
-			{/if}
 		{/if}
 	</div>
 </div>
@@ -114,27 +74,40 @@
 		word-wrap: break-word;
 	}
 
-	.body-input {
+	.edit-content {
 		width: 100%;
-		padding: 0.75rem;
-		border: 1px solid #ced4da;
-		border-radius: 4px;
+		min-height: 60px;
+		background: transparent;
+		border: none;
+		outline: none;
 		font-size: 0.95rem;
 		line-height: 1.5;
+		color: var(--text-color);
+		font-family: inherit;
+		word-wrap: break-word;
+		overflow-wrap: break-word;
 		resize: vertical;
-		margin-bottom: 0.75rem;
+		padding: 0.5rem;
+		border-radius: 4px;
+		transition: background-color 0.2s ease;
 	}
 
-	.dark .body-input {
-		background: #2f3336;
-		border-color: #3f4447;
-		color: #e7e9ea;
+	.edit-content:focus {
+		background: rgba(0, 123, 255, 0.05);
 	}
 
-	.edit-actions {
-		display: flex;
-		gap: 0.5rem;
-		justify-content: flex-end;
+	.dark .edit-content:focus {
+		background: rgba(29, 155, 240, 0.1);
+	}
+
+	.edit-content:empty:before {
+		content: attr(placeholder);
+		color: rgba(108, 117, 125, 0.5);
+		pointer-events: none;
+	}
+
+	.dark .edit-content:empty:before {
+		color: rgba(113, 118, 123, 0.5);
 	}
 
 	.card-actions {

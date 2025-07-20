@@ -160,7 +160,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: 1rem;
-		padding: 1rem;
+
 		width: 70%;
 		margin: 0 auto;
 	}
