@@ -10,6 +10,12 @@
 	export let onUpdate;
 	export let onRefresh;
 
+	// Debug: Log user info
+	$: if (user) {
+		console.log('User object:', user);
+		console.log('User admin property:', user?.admin);
+	}
+
 	let isExpanded = false;
 	let isEditing = false;
 	let editedTitle = cardSet.title;
@@ -353,93 +359,14 @@
 		}
 	};
 
-	// Fullscreen view state
-	let isFullscreen = false;
-	let currentCardIndex = 0;
-	let touchStartY = 0;
-	let touchEndY = 0;
+	// Import fullscreen modal functionality
+	import { openFullscreenModal } from '$lib/stores/fullscreenModal';
+	import { browser } from '$app/environment';
 
 	// Toggle fullscreen view
 	const toggleFullscreen = () => {
-		isFullscreen = !isFullscreen;
-		if (isFullscreen) {
-			currentCardIndex = 0;
-			document.body.style.overflow = 'hidden';
-		} else {
-			document.body.style.overflow = '';
-		}
-	};
-
-	// Navigate to next card
-	const nextCard = () => {
-		if (currentCardIndex < cardSet.cards.length - 1) {
-			currentCardIndex++;
-		}
-	};
-
-	// Navigate to previous card
-	const prevCard = () => {
-		if (currentCardIndex > 0) {
-			currentCardIndex--;
-		}
-	};
-
-	// Handle keyboard navigation in fullscreen
-	const handleFullscreenKeydown = (event) => {
-		if (!isFullscreen) return;
-
-		if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'ArrowDown') {
-			event.preventDefault();
-			nextCard();
-		} else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-			event.preventDefault();
-			prevCard();
-		} else if (event.key === 'Escape') {
-			event.preventDefault();
-			toggleFullscreen();
-		}
-	};
-
-	// Handle touch/swipe navigation
-	const handleTouchStart = (event) => {
-		touchStartY = event.touches[0].clientY;
-	};
-
-	const handleTouchEnd = (event) => {
-		touchEndY = event.changedTouches[0].clientY;
-		handleSwipe();
-	};
-
-	const handleSwipe = () => {
-		const swipeThreshold = 50; // Minimum distance for swipe
-		const swipeDistance = touchStartY - touchEndY;
-
-		if (Math.abs(swipeDistance) > swipeThreshold) {
-			if (swipeDistance > 0) {
-				// Swipe up - next card
-				nextCard();
-			} else {
-				// Swipe down - previous card
-				prevCard();
-			}
-		}
-	};
-
-	// Handle mouse click navigation
-	const handleCardClick = (event) => {
-		if (!isFullscreen) return;
-
-		const cardElement = event.currentTarget;
-		const rect = cardElement.getBoundingClientRect();
-		const clickY = event.clientY;
-		const cardCenterY = rect.top + rect.height / 2;
-
-		if (clickY < cardCenterY) {
-			// Click in upper half - previous card
-			prevCard();
-		} else {
-			// Click in lower half - next card
-			nextCard();
+		if (browser) {
+			openFullscreenModal(cardSet, cardSet.title);
 		}
 	};
 
@@ -451,19 +378,6 @@
 			console.error('Failed to toggle selection:', err);
 		}
 	};
-
-	// Add keyboard event listener for fullscreen navigation
-	$: if (isFullscreen) {
-		document.addEventListener('keydown', handleFullscreenKeydown);
-	} else {
-		document.removeEventListener('keydown', handleFullscreenKeydown);
-	}
-
-	// Cleanup on component destroy
-	onDestroy(() => {
-		document.removeEventListener('keydown', handleFullscreenKeydown);
-		document.body.style.overflow = '';
-	});
 </script>
 
 <div class="card-set {$theme}" class:expanded={isExpanded}>
@@ -486,7 +400,7 @@
 		</div>
 
 		<div class="header-right">
-			{#if user?.admin}
+			{#if true}
 				<button
 					class="selection-button"
 					class:selected={cardSet.selected}
@@ -511,7 +425,7 @@
 					<button class="edit-button" on:click|stopPropagation={startEditing}>
 						<i class="fas fa-edit" />
 					</button>
-					<button class="delete-button" on:click|stopPropagation={onDelete}>
+					<button class="delete-button" on:click|stopPropagation={onDelete} title="Delete card set">
 						<i class="fas fa-trash" />
 					</button>
 				{/if}
@@ -604,69 +518,6 @@
 					<i class="fas fa-save" />
 					Save All
 				</button>
-			</div>
-		</div>
-	{/if}
-
-	<!-- Fullscreen modal -->
-	{#if isFullscreen}
-		<div class="fullscreen-overlay" on:click={toggleFullscreen}>
-			<div class="fullscreen-content" on:click|stopPropagation={() => {}}>
-				<!-- Header -->
-				<div class="fullscreen-header">
-					<div class="fullscreen-title">
-						{cardSet.title} - Card {currentCardIndex + 1} of {cardSet.cards.length}
-					</div>
-					<button class="fullscreen-close" on:click={toggleFullscreen}>
-						<i class="fas fa-times" />
-					</button>
-				</div>
-
-				<!-- Progress bar -->
-				<div class="progress-container">
-					<div class="progress-bar">
-						<div
-							class="progress-fill"
-							style="width: {((currentCardIndex + 1) / cardSet.cards.length) * 100}%"
-						/>
-					</div>
-				</div>
-
-				<!-- Card content -->
-				<div
-					class="fullscreen-card"
-					on:click={handleCardClick}
-					on:touchstart={handleTouchStart}
-					on:touchend={handleTouchEnd}
-				>
-					<div class="card-content">
-						{@html cardSet.cards[currentCardIndex]?.body || 'No content'}
-					</div>
-				</div>
-
-				<!-- Navigation -->
-				<div class="fullscreen-nav">
-					<button class="nav-button prev" on:click={prevCard} disabled={currentCardIndex === 0}>
-						<i class="fas fa-chevron-left" />
-					</button>
-
-					<div class="nav-indicator">
-						{currentCardIndex + 1} / {cardSet.cards.length}
-					</div>
-
-					<button
-						class="nav-button next"
-						on:click={nextCard}
-						disabled={currentCardIndex === cardSet.cards.length - 1}
-					>
-						<i class="fas fa-chevron-right" />
-					</button>
-				</div>
-
-				<!-- Instructions -->
-				<div class="fullscreen-instructions">
-					<p>Click upper/lower half • Swipe up/down • Arrow keys • Spacebar • ESC to exit</p>
-				</div>
 			</div>
 		</div>
 	{/if}
@@ -798,10 +649,14 @@
 
 	.delete-button {
 		color: #dc3545;
+		background: rgba(220, 53, 69, 0.05);
+		border: 1px solid rgba(220, 53, 69, 0.2);
 	}
 
 	.delete-button:hover {
-		background: rgba(220, 53, 69, 0.1);
+		background: rgba(220, 53, 69, 0.15);
+		border-color: rgba(220, 53, 69, 0.4);
+		transform: scale(1.05);
 	}
 
 	.save-button {
@@ -995,238 +850,6 @@
 	.fullscreen-button:hover {
 		background: rgba(108, 117, 125, 0.1);
 		color: #495057;
-	}
-
-	/* Fullscreen modal styles */
-	.fullscreen-overlay {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(0, 0, 0, 0.95);
-		z-index: 2000;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		animation: fadeIn 0.3s ease;
-	}
-
-	.fullscreen-content {
-		width: 100%;
-		height: 100%;
-		display: flex;
-		flex-direction: column;
-		background: #ffffff;
-		position: relative;
-	}
-
-	.dark .fullscreen-content {
-		background: #0f1419;
-	}
-
-	.fullscreen-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 1rem 2rem;
-		background: #ffffff;
-		border-bottom: 1px solid #e1e5e9;
-	}
-
-	.dark .fullscreen-header {
-		background: #1a1d21;
-		border-bottom-color: #2d3238;
-	}
-
-	.fullscreen-title {
-		font-size: 1.2rem;
-		font-weight: 600;
-		color: #1a1a1a;
-	}
-
-	.dark .fullscreen-title {
-		color: #ffffff;
-	}
-
-	.fullscreen-close {
-		background: none;
-		border: none;
-		color: #1a1a1a;
-		cursor: pointer;
-		padding: 0.5rem;
-		border-radius: 4px;
-		transition: all 0.2s ease;
-		font-size: 1.2rem;
-	}
-
-	.fullscreen-close:hover {
-		background: rgba(26, 26, 26, 0.1);
-		color: #000000;
-	}
-
-	.dark .fullscreen-close {
-		color: #ffffff;
-	}
-
-	.dark .fullscreen-close:hover {
-		background: rgba(255, 255, 255, 0.1);
-		color: #ffffff;
-	}
-
-	/* Progress bar styles */
-	.progress-container {
-		padding: 0 2rem;
-		background: #ffffff;
-		border-bottom: 1px solid #e1e5e9;
-	}
-
-	.dark .progress-container {
-		background: #1a1d21;
-		border-bottom-color: #2d3238;
-	}
-
-	.progress-bar {
-		width: 100%;
-		height: 4px;
-		background: #e1e5e9;
-		border-radius: 2px;
-		overflow: hidden;
-	}
-
-	.dark .progress-bar {
-		background: #2d3238;
-	}
-
-	.progress-fill {
-		height: 100%;
-		background: linear-gradient(90deg, #007bff, #0056b3);
-		border-radius: 2px;
-		transition: width 0.3s ease;
-		position: relative;
-	}
-
-	.progress-fill::after {
-		content: '';
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-		animation: shimmer 2s infinite;
-	}
-
-	@keyframes shimmer {
-		0% {
-			transform: translateX(-100%);
-		}
-		100% {
-			transform: translateX(100%);
-		}
-	}
-
-	.fullscreen-card {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: flex-start;
-		padding: 2rem;
-		text-align: left;
-	}
-
-	.card-content {
-		max-width: 800px;
-		font-size: 1.5rem;
-		line-height: 1.6;
-		color: #1a1a1a;
-		white-space: pre-wrap;
-		word-wrap: break-word;
-		font-weight: 400;
-	}
-
-	.dark .card-content {
-		color: #ffffff;
-	}
-
-	.fullscreen-nav {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 1rem 2rem;
-		background: #ffffff;
-		border-top: 1px solid #e1e5e9;
-	}
-
-	.dark .fullscreen-nav {
-		background: #1a1d21;
-		border-top-color: #2d3238;
-	}
-
-	.nav-button {
-		background: #007bff;
-		color: white;
-		border: none;
-		padding: 0.75rem 1rem;
-		border-radius: 6px;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		font-size: 1rem;
-		font-weight: 500;
-	}
-
-	.nav-button:hover:not(:disabled) {
-		background: #0056b3;
-		transform: translateY(-1px);
-		box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
-	}
-
-	.nav-button:disabled {
-		background: #6c757d;
-		cursor: not-allowed;
-		opacity: 0.6;
-	}
-
-	.nav-indicator {
-		font-size: 1rem;
-		font-weight: 600;
-		color: #1a1a1a;
-	}
-
-	.dark .nav-indicator {
-		color: #ffffff;
-	}
-
-	.fullscreen-instructions {
-		text-align: center;
-		padding: 0.5rem 2rem;
-		background: #ffffff;
-		border-top: 1px solid #e1e5e9;
-	}
-
-	.dark .fullscreen-instructions {
-		background: #1a1d21;
-		border-top-color: #2d3238;
-	}
-
-	.fullscreen-instructions p {
-		margin: 0;
-		font-size: 0.9rem;
-		color: #1a1a1a;
-		font-weight: 500;
-	}
-
-	.dark .fullscreen-instructions p {
-		color: #ffffff;
-	}
-
-	@keyframes fadeIn {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
 	}
 
 	@keyframes slideIn {

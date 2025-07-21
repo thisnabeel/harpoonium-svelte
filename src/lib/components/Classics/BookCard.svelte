@@ -1,5 +1,7 @@
 <script>
 	import { user } from '$lib/stores/user';
+	import Api from '$lib/api/api.js';
+	import { openFullscreenModal } from '$lib/stores/fullscreenModal';
 
 	export let book;
 	export let onAction;
@@ -8,6 +10,23 @@
 
 	function navigateToEdit() {
 		window.location.href = `/chapters/${book.id}`;
+	}
+
+	async function read(book) {
+		try {
+			const response = await Api.get(`/books/${book.id}/read`);
+			console.log({ response });
+			if (response.card_set && response.card_set.cards && response.card_set.cards.length > 0) {
+				openFullscreenModal(response.card_set, `${book.title} - ${response.chapter.title}`);
+			} else {
+				// Fallback to navigation if no cards available
+				// window.location.href = `/chapters/${book.id}`;
+			}
+		} catch (error) {
+			console.error('Failed to load book content:', error);
+			// Fallback to navigation on error
+			// window.location.href = `/chapters/${book.id}`;
+		}
 	}
 </script>
 
@@ -22,7 +41,8 @@
 	</div>
 	<h3>{book.title}</h3>
 	<p class="description">{book.description}</p>
-	<button
+	<button class="action-button read-button" on:click={() => read(book)}>Read</button>
+	<!-- <button
 		class="action-button"
 		class:subscribe={actionLabel === 'Subscribe'}
 		class:unsubscribe={actionLabel === 'Unsubscribe'}
@@ -34,7 +54,7 @@
 		{:else}
 			{actionLabel}
 		{/if}
-	</button>
+	</button> -->
 </div>
 
 <style>

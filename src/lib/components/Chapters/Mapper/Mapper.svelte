@@ -3,6 +3,8 @@
 	import Api from '$lib/api/api';
 	import { theme } from '$lib/stores/main';
 	import { goto } from '$app/navigation';
+	import { selectedChapter } from '$lib/stores/chapters/mapper';
+	import { page } from '$app/stores';
 
 	export let chapterId;
 	let isLoading = true;
@@ -27,6 +29,36 @@
 			isLoading = false;
 		}
 	});
+
+	// Sync selected chapter with current chapter when data loads
+	$: if (currentChapter && !isLoading) {
+		selectedChapter.set(currentChapter);
+	}
+
+	// Update selected chapter when URL changes
+	$: if ($page.url.pathname.includes('/chapters/') && currentChapter) {
+		const urlChapterId = $page.url.pathname.split('/chapters/')[1]?.split('/')[0];
+		if (urlChapterId && urlChapterId !== currentChapter.id?.toString()) {
+			// Find the chapter in tableOfContents that matches the URL
+			const findChapter = (chapters, targetId) => {
+				for (const chapter of chapters) {
+					if (chapter.id?.toString() === targetId) {
+						return chapter;
+					}
+					if (chapter.chapters) {
+						const found = findChapter(chapter.chapters, targetId);
+						if (found) return found;
+					}
+				}
+				return null;
+			};
+
+			const urlChapter = findChapter(tableOfContents, urlChapterId);
+			if (urlChapter) {
+				selectedChapter.set(urlChapter);
+			}
+		}
+	}
 
 	function getIndentLevel(position) {
 		return position > 1 ? 1 : 0; // Simple indentation for now

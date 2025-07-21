@@ -13,6 +13,9 @@
 	import '@fortawesome/fontawesome-free/css/all.min.css';
 
 	import GaragePopUp from '$lib/pop-ups/Garage.svelte';
+	import FullscreenModal from '$lib/components/FullscreenModal/FullscreenModal.svelte';
+	import { fullscreenModal, closeFullscreenModal } from '$lib/stores/fullscreenModal';
+	import { browser } from '$app/environment';
 
 	import Creds from '$lib/nav-buttons/creds/Creds.svelte';
 
@@ -72,6 +75,15 @@
 </Modals>
 
 <GaragePopUp />
+
+{#if browser}
+	<FullscreenModal
+		isOpen={$fullscreenModal.isOpen}
+		cardSet={$fullscreenModal.cardSet}
+		title={$fullscreenModal.title}
+		onClose={closeFullscreenModal}
+	/>
+{/if}
 
 <!-- <footer>
 	<p>visit <a href="https://kit.svelte.dev">kit.svelte.dev</a> to learn SvelteKit</p>

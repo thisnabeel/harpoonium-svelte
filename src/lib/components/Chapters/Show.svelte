@@ -92,6 +92,14 @@
 	let tabs = ['Body', 'Concepts', 'Research', 'Mapper', 'Writer', 'Scripts', 'Cards', 'Reader'];
 	let activeTab = null;
 
+	// Auto-activate Mapper tab if chapter body is empty or contains default text
+	$: if (
+		chapter &&
+		(!chapter.body || chapter.body === '' || chapter.body === 'Start writing your chapter...')
+	) {
+		activeTab = 'Mapper';
+	}
+
 	function startEditing() {
 		editedTitle = chapter.title;
 		editedDescription = chapter.description || '';

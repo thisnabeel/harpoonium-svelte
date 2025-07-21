@@ -2,15 +2,14 @@
 	import { theme } from '$lib/stores/main';
 	import { user } from '$lib/stores/user';
 	import Api from '$lib/api/api.js';
+	import { openFullscreenModal } from '$lib/stores/fullscreenModal';
+	import { browser } from '$app/environment';
 
 	export let chapter;
 
 	let currentCardIndex = 0;
 	let cards = [];
 	let isLoading = false;
-	let isFullscreen = false;
-	let touchStartY = 0;
-	let touchEndY = 0;
 
 	// Split chapter body into sentence-based cards
 	const createReadingCards = async () => {
@@ -67,35 +66,20 @@
 		}
 	};
 
-	// Touch/swipe navigation for fullscreen mode
-	const handleTouchStart = (event) => {
-		event.preventDefault();
-		touchStartY = event.touches[0].clientY;
-	};
-
-	const handleTouchEnd = (event) => {
-		event.preventDefault();
-		touchEndY = event.changedTouches[0].clientY;
-		const diffY = touchStartY - touchEndY;
-		const minSwipeDistance = 50;
-
-		if (Math.abs(diffY) > minSwipeDistance) {
-			if (diffY > 0) {
-				// Swipe up - next card
-				goToNext();
-			} else {
-				// Swipe down - previous card
-				goToPrevious();
-			}
-		}
-	};
-
-	const handleTouchMove = (event) => {
-		event.preventDefault();
-	};
-
 	const toggleFullscreen = () => {
-		isFullscreen = !isFullscreen;
+		if (browser && cards.length > 0) {
+			// Convert cards to the format expected by the fullscreen modal
+			const cardSet = {
+				id: chapter?.id || 'reader',
+				title: chapter?.title || 'Reader',
+				cards: cards.map((card) => ({
+					id: card.id,
+					body: card.content,
+					position: card.position
+				}))
+			};
+			openFullscreenModal(cardSet, chapter?.title || 'Reader');
+		}
 	};
 
 	// Text editing functions
@@ -384,47 +368,6 @@
 		</div>
 	{/if}
 </div>
-
-<!-- Fullscreen Modal -->
-{#if isFullscreen && cards.length > 0}
-	<div
-		class="fullscreen-modal"
-		on:touchstart={handleTouchStart}
-		on:touchmove={handleTouchMove}
-		on:touchend={handleTouchEnd}
-	>
-		<div class="fullscreen-header">
-			<button class="close-button" on:click={toggleFullscreen}>
-				<i class="fas fa-times" />
-			</button>
-		</div>
-
-		<div class="fullscreen-content">
-			<div class="fullscreen-card">
-				<div class="card-text">
-					{@html cards[currentCardIndex].content}
-				</div>
-			</div>
-		</div>
-
-		<div class="fullscreen-footer">
-			<div class="fullscreen-progress">
-				<div class="progress-dots">
-					{#each cards as card, index}
-						<div
-							class="progress-dot"
-							class:active={index === currentCardIndex}
-							on:click={() => goToCard(index)}
-						/>
-					{/each}
-				</div>
-				<div class="progress-text">
-					{currentCardIndex + 1} / {cards.length}
-				</div>
-			</div>
-		</div>
-	</div>
-{/if}
 
 <style>
 	.reader-container {
@@ -822,171 +765,6 @@
 
 		.nav-hint {
 			font-size: 0.8rem;
-		}
-	}
-
-	/* Fullscreen Modal Styles */
-	.fullscreen-modal {
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100vw;
-		height: 100vh;
-		background: #000;
-		z-index: 9999;
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-		touch-action: none;
-		-webkit-overflow-scrolling: touch;
-	}
-
-	.fullscreen-header {
-		position: absolute;
-		top: 0;
-		right: 0;
-		z-index: 10;
-		padding: 1rem;
-	}
-
-	.close-button {
-		width: 50px;
-		height: 50px;
-		background: rgba(0, 0, 0, 0.5);
-		color: white;
-		border: none;
-		border-radius: 50%;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 1.2rem;
-		transition: all 0.2s ease;
-		-webkit-tap-highlight-color: transparent;
-		touch-action: manipulation;
-	}
-
-	.close-button:hover,
-	.close-button:active {
-		background: rgba(0, 0, 0, 0.7);
-		transform: scale(1.1);
-	}
-
-	.fullscreen-content {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 2rem;
-	}
-
-	.fullscreen-card {
-		max-width: 90vw;
-		max-height: 80vh;
-		background: rgba(255, 255, 255, 0.1);
-		border-radius: 20px;
-		padding: 3rem;
-		backdrop-filter: blur(10px);
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		display: flex;
-		align-items: flex-start;
-		justify-content: flex-start;
-		text-align: left;
-	}
-
-	.card-text {
-		font-size: 2rem;
-		line-height: 1.4;
-		color: white;
-		font-weight: 300;
-		text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-	}
-
-	.card-text :global(*) {
-		color: white !important;
-	}
-
-	.fullscreen-footer {
-		position: absolute;
-		bottom: 0;
-		left: 0;
-		right: 0;
-		padding: 2rem;
-		background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
-	}
-
-	.fullscreen-progress {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 1rem;
-	}
-
-	.progress-dots {
-		display: flex;
-		gap: 0.5rem;
-		flex-wrap: wrap;
-		justify-content: center;
-		max-width: 100%;
-	}
-
-	.progress-dot {
-		width: 12px;
-		height: 12px;
-		border-radius: 50%;
-		background: rgba(255, 255, 255, 0.3);
-		cursor: pointer;
-		transition: all 0.2s ease;
-	}
-
-	.progress-dot:hover {
-		background: rgba(255, 255, 255, 0.5);
-		transform: scale(1.2);
-	}
-
-	.progress-dot.active {
-		background: #1d9bf0;
-		transform: scale(1.3);
-	}
-
-	.progress-text {
-		color: white;
-		font-size: 1.1rem;
-		font-weight: 500;
-		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-	}
-
-	@media (max-width: 768px) {
-		.fullscreen-content {
-			padding: 1rem;
-		}
-
-		.fullscreen-card {
-			padding: 2rem;
-			max-width: 95vw;
-		}
-
-		.card-text {
-			font-size: 1.5rem;
-		}
-
-		.fullscreen-footer {
-			padding: 1.5rem;
-		}
-
-		.progress-dot {
-			width: 10px;
-			height: 10px;
-		}
-
-		.close-button {
-			width: 60px;
-			height: 60px;
-			font-size: 1.5rem;
-		}
-
-		.fullscreen-header {
-			padding: 1.5rem;
 		}
 	}
 </style>

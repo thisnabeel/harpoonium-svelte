@@ -15,9 +15,7 @@
 	import { slide } from 'svelte/transition';
 	import BookCard from '../Classics/BookCard.svelte';
 	import { goto } from '$app/navigation';
-	import { openModal } from 'svelte-modals';
 	import Api from '$lib/api/api';
-	import CreateBookModal from '$lib/modals/books/create.svelte';
 	// import AddBookModal from '$lib/modals/books/add.svelte';
 
 	async function handleFilter() {
@@ -41,7 +39,23 @@
 	}
 
 	async function handleGenerateBook() {
-		openModal(CreateBookModal);
+		const title = prompt('Title?');
+		if (title && title.trim()) {
+			try {
+				await Api.post('/chapters', {
+					title: title.trim(),
+					chapter_id: null
+				});
+				// Refresh the books list after creating a new chapter
+				if ($allBooks.length === 0) {
+					await fetchAllBooks();
+				}
+				alert('New chapter created successfully!');
+			} catch (error) {
+				console.error('Failed to create chapter:', error);
+				alert('Failed to create chapter. Please try again.');
+			}
+		}
 	}
 
 	$: exploreBooks = $allBooks.filter(
@@ -129,7 +143,7 @@
 				{#if $user?.admin}
 					<div class="book-card add-book-card" on:click={handleGenerateBook}>
 						<div class="add-book-content">
-							<i class="fas fa-bolt" />
+							<i class="fas fa-plus" />
 							<span>Add New Book</span>
 						</div>
 					</div>

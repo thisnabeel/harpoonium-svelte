@@ -6,8 +6,10 @@
 
 	export let chapter;
 
+	/** @type {Array<any>} */
 	let cardSets = [];
 	let isLoading = false;
+	/** @type {string | null} */
 	let error = null;
 	let showCreateForm = false;
 	let newCardSetTitle = '';
@@ -50,6 +52,9 @@
 	};
 
 	// Delete card set
+	/**
+	 * @param {string | number} cardSetId
+	 */
 	const deleteCardSet = async (cardSetId) => {
 		if (
 			!confirm(
@@ -69,6 +74,10 @@
 	};
 
 	// Update card set
+	/**
+	 * @param {string | number} cardSetId
+	 * @param {any} updates
+	 */
 	const updateCardSet = async (cardSetId, updates) => {
 		try {
 			const response = await Api.put(`/card_sets/${cardSetId}`, updates);
@@ -100,9 +109,9 @@
 			const sentences = content
 				.replace(/([.!?])\s*(?=[A-Z])/g, '$1|') // Split on sentence endings followed by capital letters
 				.split('|')
-				.map((sentence) => sentence.trim())
-				.filter((sentence) => sentence.length > 10) // Filter out very short fragments
-				.map((sentence, index) => ({
+				.map((/** @type {string} */ sentence) => sentence.trim())
+				.filter((/** @type {string} */ sentence) => sentence.length > 10) // Filter out very short fragments
+				.map((/** @type {string} */ sentence, /** @type {number} */ index) => ({
 					body: sentence,
 					position: index + 1
 				}));
@@ -207,7 +216,7 @@
 					{cardSet}
 					{user}
 					onDelete={() => deleteCardSet(cardSet.id)}
-					onUpdate={(updates) => updateCardSet(cardSet.id, updates)}
+					onUpdate={(/** @type {any} */ updates) => updateCardSet(cardSet.id, updates)}
 					onRefresh={refreshCardSets}
 				/>
 			{/each}

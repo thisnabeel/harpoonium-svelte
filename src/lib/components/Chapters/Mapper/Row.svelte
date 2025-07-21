@@ -2,11 +2,20 @@
 	export let item;
 	export let remove;
 	import { goto } from '$app/navigation';
-
 	import { selectedChapter } from '$lib/stores/chapters/mapper';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 
 	// $: console.log('newItem', item);
+
+	// Sync with URL changes
+	$: if ($page.url.pathname.includes('/chapters/') && item) {
+		const urlChapterId = $page.url.pathname.split('/chapters/')[1]?.split('/')[0];
+		if (urlChapterId === item.id?.toString() && $selectedChapter?.id !== item.id) {
+			selectedChapter.set(item);
+		}
+	}
+
 	function handleChapterClick() {
 		if ($selectedChapter && $selectedChapter.id === item.id) {
 			selectedChapter.set(null);
