@@ -44,7 +44,8 @@
 			try {
 				await Api.post('/chapters', {
 					title: title.trim(),
-					chapter_id: null
+					chapter_id: null,
+					classic: true
 				});
 				// Refresh the books list after creating a new chapter
 				if ($allBooks.length === 0) {

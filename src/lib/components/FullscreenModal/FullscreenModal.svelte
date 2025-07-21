@@ -6,6 +6,13 @@
 	export let cardSet = null;
 	export let title = '';
 	export let onClose = () => {};
+	export let onNextChapter = null; // New prop for next chapter functionality
+
+	// Type definitions for better TypeScript support
+	/** @type {any} */
+	let typedCardSet = cardSet;
+	/** @type {(() => void) | null} */
+	let typedOnNextChapter = onNextChapter;
 
 	let currentCardIndex = 0;
 	let touchStartY = 0;
@@ -13,7 +20,7 @@
 
 	// Navigate to next card
 	const nextCard = () => {
-		if (cardSet?.cards && currentCardIndex < cardSet.cards.length - 1) {
+		if (typedCardSet?.cards && currentCardIndex < typedCardSet.cards.length - 1) {
 			currentCardIndex++;
 		}
 	};
@@ -25,8 +32,15 @@
 		}
 	};
 
+	// Handle next chapter
+	const handleNextChapter = () => {
+		if (typedOnNextChapter) {
+			typedOnNextChapter();
+		}
+	};
+
 	// Handle keyboard navigation
-	const handleKeydown = (event) => {
+	const handleKeydown = (/** @type {KeyboardEvent} */ event) => {
 		if (!isOpen) return;
 
 		if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'ArrowDown') {
@@ -42,11 +56,11 @@
 	};
 
 	// Handle touch/swipe navigation
-	const handleTouchStart = (event) => {
+	const handleTouchStart = (/** @type {TouchEvent} */ event) => {
 		touchStartY = event.touches[0].clientY;
 	};
 
-	const handleTouchEnd = (event) => {
+	const handleTouchEnd = (/** @type {TouchEvent} */ event) => {
 		touchEndY = event.changedTouches[0].clientY;
 		handleSwipe();
 	};
@@ -67,10 +81,10 @@
 	};
 
 	// Handle mouse click navigation
-	const handleCardClick = (event) => {
+	const handleCardClick = (/** @type {MouseEvent} */ event) => {
 		if (!isOpen) return;
 
-		const cardElement = event.currentTarget;
+		const cardElement = /** @type {HTMLElement} */ (event.currentTarget);
 		const rect = cardElement.getBoundingClientRect();
 		const clickY = event.clientY;
 		const cardCenterY = rect.top + rect.height / 2;
@@ -85,7 +99,7 @@
 	};
 
 	// Reset card index when modal opens
-	$: if (isOpen && cardSet?.cards && typeof document !== 'undefined') {
+	$: if (isOpen && typedCardSet?.cards && typeof document !== 'undefined') {
 		currentCardIndex = 0;
 		document.body.style.overflow = 'hidden';
 	} else if (!isOpen && typeof document !== 'undefined') {
@@ -108,13 +122,13 @@
 	});
 </script>
 
-{#if isOpen && cardSet}
-	<div class="fullscreen-overlay" on:click={onClose}>
+{#if isOpen && typedCardSet}
+	<div class="fullscreen-overlay dark" on:click={onClose}>
 		<div class="fullscreen-content" on:click|stopPropagation={() => {}}>
 			<!-- Header -->
 			<div class="fullscreen-header">
 				<div class="fullscreen-title">
-					{title || cardSet.title} - Card {currentCardIndex + 1} of {cardSet.cards.length}
+					{title || typedCardSet.title} - Card {currentCardIndex + 1} of {typedCardSet.cards.length}
 				</div>
 				<button class="fullscreen-close" on:click={onClose}>
 					<i class="fas fa-times" />
@@ -126,7 +140,7 @@
 				<div class="progress-bar">
 					<div
 						class="progress-fill"
-						style="width: {((currentCardIndex + 1) / cardSet.cards.length) * 100}%"
+						style="width: {((currentCardIndex + 1) / typedCardSet.cards.length) * 100}%"
 					/>
 				</div>
 			</div>
@@ -139,7 +153,7 @@
 				on:touchend={handleTouchEnd}
 			>
 				<div class="card-content">
-					{@html cardSet.cards[currentCardIndex]?.body || 'No content'}
+					{@html typedCardSet.cards[currentCardIndex]?.body || 'No content'}
 				</div>
 			</div>
 
@@ -150,22 +164,28 @@
 				</button>
 
 				<div class="nav-indicator">
-					{currentCardIndex + 1} / {cardSet.cards.length}
+					{currentCardIndex + 1} / {typedCardSet.cards.length}
 				</div>
 
-				<button
-					class="nav-button next"
-					on:click={nextCard}
-					disabled={currentCardIndex === cardSet.cards.length - 1}
-				>
-					<i class="fas fa-chevron-right" />
-				</button>
+				{#if currentCardIndex === typedCardSet.cards.length - 1 && onNextChapter}
+					<button class="nav-button next-chapter" on:click={handleNextChapter}>
+						Next Chapter <i class="fas fa-arrow-right" />
+					</button>
+				{:else}
+					<button
+						class="nav-button next"
+						on:click={nextCard}
+						disabled={currentCardIndex === typedCardSet.cards.length - 1}
+					>
+						<i class="fas fa-chevron-right" />
+					</button>
+				{/if}
 			</div>
 
 			<!-- Instructions -->
-			<div class="fullscreen-instructions">
+			<!-- <div class="fullscreen-instructions">
 				<p>Click upper/lower half • Swipe up/down • Arrow keys • Spacebar • ESC to exit</p>
-			</div>
+			</div> -->
 		</div>
 	</div>
 {/if}
@@ -313,13 +333,13 @@
 		max-width: 800px;
 		font-size: 1.5rem;
 		line-height: 1.6;
-		color: #1a1a1a;
+
 		white-space: pre-wrap;
 		word-wrap: break-word;
 		font-weight: 400;
 	}
 
-	.dark .card-content {
+	.fullscreen-card :global(*) {
 		color: #ffffff;
 	}
 
@@ -359,6 +379,21 @@
 		background: #6c757d;
 		cursor: not-allowed;
 		opacity: 0.6;
+	}
+
+	.nav-button.next-chapter {
+		background: linear-gradient(135deg, #28a745, #20c997);
+		font-weight: 600;
+		padding: 0.75rem 1.5rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.nav-button.next-chapter:hover {
+		background: linear-gradient(135deg, #218838, #1ea085);
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
 	}
 
 	.nav-indicator {
