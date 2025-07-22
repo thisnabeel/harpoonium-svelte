@@ -69,10 +69,16 @@
 
 	// Handle touch/swipe navigation
 	const handleTouchStart = (/** @type {TouchEvent} */ event) => {
+		event.preventDefault();
 		touchStartY = event.touches[0].clientY;
 	};
 
+	const handleTouchMove = (/** @type {TouchEvent} */ event) => {
+		event.preventDefault();
+	};
+
 	const handleTouchEnd = (/** @type {TouchEvent} */ event) => {
+		event.preventDefault();
 		touchEndY = event.changedTouches[0].clientY;
 		handleSwipe();
 	};
@@ -162,6 +168,7 @@
 				class="fullscreen-card"
 				on:click={handleCardClick}
 				on:touchstart={handleTouchStart}
+				on:touchmove={handleTouchMove}
 				on:touchend={handleTouchEnd}
 			>
 				<div class="card-content">
@@ -225,6 +232,7 @@
 		flex-direction: column;
 		background: #ffffff;
 		position: relative;
+		touch-action: none; /* Prevent browser scrolling */
 	}
 
 	.dark .fullscreen-content {
@@ -339,6 +347,7 @@
 		justify-content: flex-start;
 		padding: 2rem;
 		text-align: left;
+		touch-action: none; /* Prevent browser scrolling during touch */
 	}
 
 	.card-content {
