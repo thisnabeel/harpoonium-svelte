@@ -14,11 +14,18 @@
 
 	async function read(book) {
 		try {
+			console.log('Reading book:', book);
 			const response = await Api.get(`/books/${book.id}/read`);
-			console.log({ response });
+			console.log('API response:', response);
 			if (response.card_set && response.card_set.cards && response.card_set.cards.length > 0) {
+				console.log(
+					'Opening fullscreen modal with:',
+					response.card_set,
+					`${book.title} - ${response.chapter.title}`
+				);
 				openFullscreenModal(response.card_set, `${book.title} - ${response.chapter.title}`);
 			} else {
+				console.log('No cards available in response');
 				// Fallback to navigation if no cards available
 				// window.location.href = `/chapters/${book.id}`;
 			}

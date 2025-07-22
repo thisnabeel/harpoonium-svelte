@@ -14,6 +14,18 @@
 	/** @type {(() => void) | null} */
 	let typedOnNextChapter = onNextChapter;
 
+	// Update typed variables when props change
+	$: typedCardSet = cardSet;
+	$: typedOnNextChapter = onNextChapter;
+
+	// Debug logging
+	$: console.log('FullscreenModal props changed:', { isOpen, cardSet, title, typedCardSet });
+	$: console.log('Template render check:', {
+		isOpen,
+		typedCardSet,
+		shouldRender: isOpen && typedCardSet
+	});
+
 	let currentCardIndex = 0;
 	let touchStartY = 0;
 	let touchEndY = 0;
