@@ -6,8 +6,8 @@ import storage from '$lib/stores/storage';
 // Create a instance of axios to use the same base url.
 const axiosAPI = axios.create({
 	// baseUrl: process.env.API_URL,
-	// baseURL: 'https://harpoonium-api.onrender.com/' // it's not recommended to have this info here.
-	baseURL: 'http://localhost:3000/'
+	baseURL: 'https://harpoonium-api.onrender.com/' // it's not recommended to have this info here.
+	// baseURL: 'http://localhost:3000/'
 });
 
 // let csrfToken;
