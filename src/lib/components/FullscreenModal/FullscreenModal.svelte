@@ -1,66 +1,173 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
 	import { theme } from '$lib/stores/main';
+	import { user } from '$lib/stores/user';
+	import Api from '$lib/api/api.js';
 
 	export let isOpen = false;
 	export let cardSet = null;
 	export let title = '';
 	export let onClose = () => {};
 	export let onNextChapter = null; // New prop for next chapter functionality
-
-	// Type definitions for better TypeScript support
-	/** @type {any} */
-	let typedCardSet = cardSet;
-	/** @type {(() => void) | null} */
-	let typedOnNextChapter = onNextChapter;
-
-	// Update typed variables when props change
-	$: typedCardSet = cardSet;
-	$: typedOnNextChapter = onNextChapter;
+	export let bookData = null; // New prop for book data with current and siblings
+	export let currentChapter = null; // New prop for current chapter
 
 	// Debug logging
-	$: console.log('FullscreenModal props changed:', { isOpen, cardSet, title, typedCardSet });
+	$: console.log('FullscreenModal props changed:', { isOpen, cardSet, title });
 	$: console.log('Template render check:', {
 		isOpen,
-		typedCardSet,
-		shouldRender: isOpen && typedCardSet
+		cardSet,
+		shouldRender: isOpen && cardSet
 	});
 
 	let currentCardIndex = 0;
 	let touchStartY = 0;
 	let touchEndY = 0;
+	let showChapterDropdown = false;
+	let currentUser = null;
+	let saveCursorTimer = null; // Timer for debouncing cursor saves
+
+	// Subscribe to user store
+	user.subscribe((value) => {
+		currentUser = value;
+	});
+
+	// Save user cursor position with debouncing
+	const saveUserCursor = async () => {
+		console.log('Saving user cursor:', {
+			currentUser,
+			currentChapter,
+			cardSet,
+			currentCardIndex
+		});
+		if (!currentUser || !currentChapter || !cardSet?.cards) {
+			return;
+		}
+
+		const currentCard = cardSet.cards[currentCardIndex];
+		if (!currentCard) {
+			return;
+		}
+
+		// Clear existing timer
+		if (saveCursorTimer) {
+			clearTimeout(saveCursorTimer);
+		}
+
+		// Set new timer - save cursor after 500ms of no navigation
+		saveCursorTimer = setTimeout(async () => {
+			try {
+				await Api.post('/cards/update_cursor', {
+					user_id: currentUser.id,
+					chapter_id: currentChapter.id,
+					card_id: currentCard.id
+				});
+				console.log('User cursor saved:', {
+					user_id: currentUser.id,
+					chapter_id: currentChapter.id,
+					card_id: currentCard.id,
+					card_index: currentCardIndex
+				});
+			} catch (error) {
+				console.error('Failed to save user cursor:', error);
+			}
+		}, 1000); // 500ms delay
+	};
+
+	// Force save cursor immediately (for chapter switching and modal close)
+	const saveUserCursorImmediate = async () => {
+		if (!currentUser || !currentChapter || !cardSet?.cards) {
+			return;
+		}
+
+		const currentCard = cardSet.cards[currentCardIndex];
+		if (!currentCard) {
+			return;
+		}
+
+		// Clear any pending timer
+		if (saveCursorTimer) {
+			clearTimeout(saveCursorTimer);
+			saveCursorTimer = null;
+		}
+
+		try {
+			await Api.post('/cards/update_cursor', {
+				user_id: currentUser.id,
+				chapter_id: currentChapter.id,
+				card_id: currentCard.id
+			});
+			console.log('User cursor saved immediately:', {
+				user_id: currentUser.id,
+				chapter_id: currentChapter.id,
+				card_id: currentCard.id,
+				card_index: currentCardIndex
+			});
+		} catch (error) {
+			console.error('Failed to save user cursor:', error);
+		}
+	};
 
 	// Navigate to next card
-	const nextCard = () => {
-		if (typedCardSet?.cards && currentCardIndex < typedCardSet.cards.length - 1) {
+	const nextCard = async () => {
+		if (cardSet?.cards && currentCardIndex < cardSet.cards.length - 1) {
 			currentCardIndex++;
+			await saveUserCursor();
 		}
 	};
 
 	// Navigate to previous card
-	const prevCard = () => {
+	const prevCard = async () => {
 		if (currentCardIndex > 0) {
 			currentCardIndex--;
+			await saveUserCursor();
 		}
 	};
 
 	// Handle next chapter
-	const handleNextChapter = () => {
-		if (typedOnNextChapter) {
-			typedOnNextChapter();
+	const handleNextChapter = async () => {
+		if (onNextChapter && typeof onNextChapter === 'function') {
+			await saveUserCursorImmediate(); // Save current position before moving to next chapter
+			onNextChapter();
+		}
+	};
+
+	// Toggle chapter dropdown
+	const toggleChapterDropdown = () => {
+		showChapterDropdown = !showChapterDropdown;
+	};
+
+	// Switch to a different chapter
+	const switchToChapter = async (chapterData) => {
+		if (!bookData || !chapterData) return;
+
+		try {
+			// Save current position before switching
+			await saveUserCursorImmediate();
+
+			// Update the current chapter and card set
+			currentChapter = chapterData.chapter;
+			cardSet = chapterData.card_set;
+			currentCardIndex = 0;
+			showChapterDropdown = false;
+
+			// Save new position
+			await saveUserCursorImmediate();
+		} catch (error) {
+			console.error('Failed to switch chapter:', error);
 		}
 	};
 
 	// Handle keyboard navigation
-	const handleKeydown = (/** @type {KeyboardEvent} */ event) => {
+	const handleKeydown = async (event) => {
 		if (!isOpen) return;
 
 		if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'ArrowDown') {
 			event.preventDefault();
-			nextCard();
+			await nextCard();
 		} else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
 			event.preventDefault();
-			prevCard();
+			await prevCard();
 		} else if (event.key === 'Escape') {
 			event.preventDefault();
 			onClose();
@@ -68,58 +175,88 @@
 	};
 
 	// Handle touch/swipe navigation
-	const handleTouchStart = (/** @type {TouchEvent} */ event) => {
+	const handleTouchStart = (event) => {
 		event.preventDefault();
 		touchStartY = event.touches[0].clientY;
 	};
 
-	const handleTouchMove = (/** @type {TouchEvent} */ event) => {
+	const handleTouchMove = (event) => {
 		event.preventDefault();
 	};
 
-	const handleTouchEnd = (/** @type {TouchEvent} */ event) => {
+	const handleTouchEnd = (event) => {
 		event.preventDefault();
 		touchEndY = event.changedTouches[0].clientY;
 		handleSwipe();
 	};
 
-	const handleSwipe = () => {
+	const handleSwipe = async () => {
 		const swipeThreshold = 50;
 		const swipeDistance = touchStartY - touchEndY;
 
 		if (Math.abs(swipeDistance) > swipeThreshold) {
 			if (swipeDistance > 0) {
 				// Swipe up - next card
-				nextCard();
+				await nextCard();
 			} else {
 				// Swipe down - previous card
-				prevCard();
+				await prevCard();
 			}
 		}
 	};
 
 	// Handle mouse click navigation
-	const handleCardClick = (/** @type {MouseEvent} */ event) => {
+	const handleCardClick = async (event) => {
 		if (!isOpen) return;
 
-		const cardElement = /** @type {HTMLElement} */ (event.currentTarget);
+		const cardElement = event.currentTarget;
 		const rect = cardElement.getBoundingClientRect();
 		const clickY = event.clientY;
 		const cardCenterY = rect.top + rect.height / 2;
 
 		if (clickY < cardCenterY) {
 			// Click in upper half - previous card
-			prevCard();
+			await prevCard();
 		} else {
 			// Click in lower half - next card
-			nextCard();
+			await nextCard();
+		}
+	};
+
+	// Load user's saved cursor position when modal opens
+	const loadUserCursor = async () => {
+		if (!currentUser || !currentChapter || !bookData) {
+			return;
+		}
+
+		try {
+			const response = await Api.get(
+				`/users/${currentUser.id}/cursor/${bookData.book_id || bookData.id}`
+			);
+			if (response && response.card_id) {
+				// Find the card index for the saved card
+				const savedCardIndex = cardSet?.cards?.findIndex((card) => card.id === response.card_id);
+				if (savedCardIndex !== -1) {
+					currentCardIndex = savedCardIndex;
+					console.log('Loaded user cursor position:', {
+						card_id: response.card_id,
+						card_index: currentCardIndex
+					});
+				}
+			}
+		} catch (error) {
+			// If no cursor found, start from beginning (error 404 is expected)
+			if (error.response?.status !== 404) {
+				console.error('Failed to load user cursor:', error);
+			}
 		}
 	};
 
 	// Reset card index when modal opens
-	$: if (isOpen && typedCardSet?.cards && typeof document !== 'undefined') {
-		currentCardIndex = 0;
+	$: if (isOpen && cardSet?.cards && typeof document !== 'undefined') {
 		document.body.style.overflow = 'hidden';
+		// Load user's saved position
+		loadUserCursor();
 	} else if (!isOpen && typeof document !== 'undefined') {
 		document.body.style.overflow = '';
 	}
@@ -131,24 +268,88 @@
 		document.removeEventListener('keydown', handleKeydown);
 	}
 
+	// Handle click outside dropdown
+	const handleClickOutside = (event) => {
+		if (showChapterDropdown && !event.target.closest('.chapter-dropdown')) {
+			showChapterDropdown = false;
+		}
+	};
+
+	// Handle touch events on dropdown to prevent closing when scrolling
+	const handleDropdownTouch = (event) => {
+		// Prevent the touch event from bubbling up and closing the dropdown
+		event.stopPropagation();
+	};
+
+	// Add click outside listener
+	$: if (isOpen && typeof document !== 'undefined') {
+		document.addEventListener('click', handleClickOutside);
+	} else if (typeof document !== 'undefined') {
+		document.removeEventListener('click', handleClickOutside);
+	}
+
+	// Save cursor when modal closes
+	const handleClose = async () => {
+		await saveUserCursorImmediate(); // Use immediate save for modal close
+		onClose();
+	};
+
 	// Cleanup on component destroy
 	onDestroy(() => {
 		if (typeof document !== 'undefined') {
 			document.removeEventListener('keydown', handleKeydown);
+			document.removeEventListener('click', handleClickOutside);
 			document.body.style.overflow = '';
+		}
+
+		// Clear any pending cursor save timer
+		if (saveCursorTimer) {
+			clearTimeout(saveCursorTimer);
+			saveCursorTimer = null;
 		}
 	});
 </script>
 
-{#if isOpen && typedCardSet}
-	<div class="fullscreen-overlay dark" on:click={onClose}>
+{#if isOpen && cardSet}
+	<div class="fullscreen-overlay dark" on:click={handleClose}>
 		<div class="fullscreen-content" on:click|stopPropagation={() => {}}>
 			<!-- Header -->
 			<div class="fullscreen-header">
-				<div class="fullscreen-title">
-					{title || typedCardSet.title} - Card {currentCardIndex + 1} of {typedCardSet.cards.length}
+				<div class="fullscreen-title-container">
+					{#if bookData && bookData.siblings && bookData.siblings.length > 0}
+						<div class="chapter-dropdown">
+							<button class="chapter-dropdown-toggle" on:click={toggleChapterDropdown}>
+								<span class="chapter-title">
+									{currentChapter?.title || cardSet.title}
+								</span>
+								<i class="fas fa-chevron-down" class:rotated={showChapterDropdown} />
+							</button>
+
+							{#if showChapterDropdown}
+								<div
+									class="chapter-dropdown-menu"
+									on:touchstart={handleDropdownTouch}
+									on:touchmove={handleDropdownTouch}
+								>
+									{#each bookData.siblings.filter((sibling) => sibling.card_set && sibling.card_set.cards && sibling.card_set.cards.length > 0) as sibling}
+										<button
+											class="chapter-option"
+											class:active={currentChapter?.id === sibling.chapter?.id}
+											on:click={() => switchToChapter(sibling)}
+										>
+											{sibling.chapter?.title || 'Untitled Chapter'}
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{:else}
+						<div class="fullscreen-title">
+							{title || cardSet.title}
+						</div>
+					{/if}
 				</div>
-				<button class="fullscreen-close" on:click={onClose}>
+				<button class="fullscreen-close" on:click={handleClose}>
 					<i class="fas fa-times" />
 				</button>
 			</div>
@@ -158,7 +359,7 @@
 				<div class="progress-bar">
 					<div
 						class="progress-fill"
-						style="width: {((currentCardIndex + 1) / typedCardSet.cards.length) * 100}%"
+						style="width: {((currentCardIndex + 1) / cardSet.cards.length) * 100}%"
 					/>
 				</div>
 			</div>
@@ -172,29 +373,33 @@
 				on:touchend={handleTouchEnd}
 			>
 				<div class="card-content">
-					{@html typedCardSet.cards[currentCardIndex]?.body || 'No content'}
+					{@html cardSet.cards[currentCardIndex]?.body || 'No content'}
 				</div>
 			</div>
 
 			<!-- Navigation -->
 			<div class="fullscreen-nav">
-				<button class="nav-button prev" on:click={prevCard} disabled={currentCardIndex === 0}>
+				<button
+					class="nav-button prev"
+					on:click={() => prevCard()}
+					disabled={currentCardIndex === 0}
+				>
 					<i class="fas fa-chevron-left" />
 				</button>
 
 				<div class="nav-indicator">
-					{currentCardIndex + 1} / {typedCardSet.cards.length}
+					{currentCardIndex + 1} / {cardSet.cards.length}
 				</div>
 
-				{#if currentCardIndex === typedCardSet.cards.length - 1 && onNextChapter}
-					<button class="nav-button next-chapter" on:click={handleNextChapter}>
+				{#if currentCardIndex === cardSet.cards.length - 1 && onNextChapter}
+					<button class="nav-button next-chapter" on:click={() => handleNextChapter()}>
 						Next Chapter <i class="fas fa-arrow-right" />
 					</button>
 				{:else}
 					<button
 						class="nav-button next"
-						on:click={nextCard}
-						disabled={currentCardIndex === typedCardSet.cards.length - 1}
+						on:click={() => nextCard()}
+						disabled={currentCardIndex === cardSet.cards.length - 1}
 					>
 						<i class="fas fa-chevron-right" />
 					</button>
@@ -253,6 +458,12 @@
 		border-bottom-color: #2d3238;
 	}
 
+	.fullscreen-title-container {
+		flex: 1;
+		display: flex;
+		align-items: center;
+	}
+
 	.fullscreen-title {
 		font-size: 1.2rem;
 		font-weight: 600;
@@ -261,6 +472,138 @@
 
 	.dark .fullscreen-title {
 		color: #ffffff;
+	}
+
+	/* Chapter dropdown styles */
+	.chapter-dropdown {
+		position: relative;
+		display: inline-block;
+	}
+
+	.chapter-dropdown-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: none;
+		border: none;
+		color: #1a1a1a;
+		font-size: 1.2rem;
+		font-weight: 600;
+		cursor: pointer;
+		padding: 0.5rem;
+		border-radius: 4px;
+		transition: all 0.2s ease;
+	}
+
+	.dark .chapter-dropdown-toggle {
+		color: #ffffff;
+	}
+
+	.chapter-dropdown-toggle:hover {
+		background: rgba(26, 26, 26, 0.1);
+	}
+
+	.dark .chapter-dropdown-toggle:hover {
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+	.chapter-title {
+		max-width: 300px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.chapter-dropdown-toggle i {
+		transition: transform 0.2s ease;
+	}
+
+	.chapter-dropdown-toggle i.rotated {
+		transform: rotate(180deg);
+	}
+
+	.chapter-dropdown-menu {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
+		background: #ffffff;
+		border: 1px solid #e1e5e9;
+		border-radius: 6px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		z-index: 1000;
+		max-height: 300px;
+		overflow-y: auto;
+		overflow-x: hidden;
+		margin-top: 0.5rem;
+		-webkit-overflow-scrolling: touch; /* Enable smooth scrolling on iOS */
+		scrollbar-width: thin; /* Firefox */
+		scrollbar-color: #c1c1c1 transparent; /* Firefox */
+	}
+
+	/* Webkit scrollbar styles for Chrome/Safari */
+	.chapter-dropdown-menu::-webkit-scrollbar {
+		width: 6px;
+	}
+
+	.chapter-dropdown-menu::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.chapter-dropdown-menu::-webkit-scrollbar-thumb {
+		background: #c1c1c1;
+		border-radius: 3px;
+	}
+
+	.chapter-dropdown-menu::-webkit-scrollbar-thumb:hover {
+		background: #a8a8a8;
+	}
+
+	.dark .chapter-dropdown-menu {
+		background: #1a1d21;
+		border-color: #2d3238;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.chapter-option {
+		display: block;
+		width: 100%;
+		padding: 0.75rem 1rem;
+		background: none;
+		border: none;
+		text-align: left;
+		color: #1a1a1a;
+		font-size: 1rem;
+		cursor: pointer;
+		transition: background-color 0.2s ease;
+		border-bottom: 1px solid #f0f0f0;
+	}
+
+	.dark .chapter-option {
+		color: #ffffff;
+		border-bottom-color: #2d3238;
+	}
+
+	.chapter-option:last-child {
+		border-bottom: none;
+	}
+
+	.chapter-option:hover {
+		background: #f8f9fa;
+	}
+
+	.dark .chapter-option:hover {
+		background: #2d3238;
+	}
+
+	.chapter-option.active {
+		background: #007bff;
+		color: white;
+		font-weight: 600;
+	}
+
+	.dark .chapter-option.active {
+		background: #007bff;
 	}
 
 	.fullscreen-close {
@@ -466,6 +809,28 @@
 
 		.fullscreen-title {
 			font-size: 1rem;
+		}
+
+		.chapter-dropdown-toggle {
+			font-size: 1rem;
+			padding: 0.4rem;
+		}
+
+		.chapter-title {
+			max-width: 200px;
+		}
+
+		.chapter-dropdown-menu {
+			left: -1rem;
+			right: -1rem;
+			max-height: 250px;
+			-webkit-overflow-scrolling: touch;
+			overscroll-behavior: contain; /* Prevent scroll chaining */
+		}
+
+		.chapter-option {
+			padding: 0.6rem 0.8rem;
+			font-size: 0.9rem;
 		}
 
 		.progress-container {

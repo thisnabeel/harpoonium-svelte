@@ -81,6 +81,8 @@
 		isOpen={$fullscreenModal.isOpen}
 		cardSet={$fullscreenModal.cardSet}
 		title={$fullscreenModal.title}
+		bookData={$fullscreenModal.bookData}
+		currentChapter={$fullscreenModal.currentChapter}
 		onClose={closeFullscreenModal}
 	/>
 {/if}

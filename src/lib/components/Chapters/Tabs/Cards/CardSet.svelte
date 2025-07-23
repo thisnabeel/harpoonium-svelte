@@ -9,6 +9,7 @@
 	export let onDelete;
 	export let onUpdate;
 	export let onRefresh;
+	export let chapter;
 
 	// Debug: Log user info
 	$: if (user) {
@@ -142,12 +143,7 @@
 						// Calculate actual cursor position in full text
 						let actualCursorPosition = 0;
 						const textNodes = [];
-						const walker = document.createTreeWalker(
-							contentEditable,
-							NodeFilter.SHOW_TEXT,
-							null,
-							false
-						);
+						const walker = document.createTreeWalker(contentEditable, NodeFilter.SHOW_TEXT);
 
 						let textNode;
 						while ((textNode = walker.nextNode())) {
@@ -213,7 +209,7 @@
 			// The cursor might be at the beginning of a text node that's not the first one
 			// Let's try to find the actual position by looking at the text node's position
 			const textNodes = [];
-			const walker = document.createTreeWalker(contentEditable, NodeFilter.SHOW_TEXT, null, false);
+			const walker = document.createTreeWalker(contentEditable, NodeFilter.SHOW_TEXT);
 
 			let textNode;
 			while ((textNode = walker.nextNode())) {
@@ -366,7 +362,7 @@
 	// Toggle fullscreen view
 	const toggleFullscreen = () => {
 		if (browser) {
-			openFullscreenModal(cardSet, cardSet.title);
+			openFullscreenModal(cardSet, cardSet.title, null, chapter);
 		}
 	};
 

@@ -213,6 +213,7 @@
 		<div class="card-sets">
 			{#each cardSets as cardSet (cardSet.id)}
 				<CardSet
+					{chapter}
 					{cardSet}
 					{user}
 					onDelete={() => deleteCardSet(cardSet.id)}

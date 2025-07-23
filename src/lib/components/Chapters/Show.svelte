@@ -14,6 +14,7 @@
 	import Inquiries from './Tabs/Research/Inquiries.svelte';
 	import Cards from './Tabs/Cards/Cards.svelte';
 	import Reader from './Tabs/Reader/Reader.svelte';
+	import { openFullscreenModal } from '$lib/stores/fullscreenModal';
 
 	export let chapter;
 
@@ -24,10 +25,35 @@
 	let isSaving = false;
 	let editedTitle = '';
 	let editedDescription = '';
+	let cardSets = [];
+	let isLoadingCardSets = false;
 
 	const fetchChapter = async (slug) => {
 		chapter = await Api.get('/chapters/' + slug + '.json');
 		console.log('gotten', chapter);
+	};
+
+	// Fetch card sets for this chapter
+	const fetchCardSets = async () => {
+		if (!chapter?.id) return;
+
+		isLoadingCardSets = true;
+		try {
+			const response = await Api.get(`/chapters/${chapter.id}/card_sets`);
+			cardSets = response || [];
+		} catch (err) {
+			console.error('Error fetching card sets:', err);
+			cardSets = [];
+		} finally {
+			isLoadingCardSets = false;
+		}
+	};
+
+	// Open first card set in fullscreen
+	const openFirstCardSet = () => {
+		if (cardSets.length > 0 && cardSets[0]) {
+			openFullscreenModal(cardSets[0], cardSets[0].title);
+		}
 	};
 
 	function openChapterVideo(chapter, abstraction) {
@@ -85,7 +111,8 @@
 	}
 
 	function handleFileSelect(event) {
-		const file = event.target?.files?.[0];
+		const target = event.target;
+		const file = target?.files?.[0];
 		if (file) handleImageUpload(file);
 	}
 
@@ -98,6 +125,11 @@
 		(!chapter.body || chapter.body === '' || chapter.body === 'Start writing your chapter...')
 	) {
 		activeTab = 'Mapper';
+	}
+
+	// Load card sets when chapter changes
+	$: if (chapter?.id) {
+		fetchCardSets();
 	}
 
 	function startEditing() {
@@ -214,6 +246,16 @@
 			{/if}
 		{/if}
 	</div>
+
+	<!-- Read button for first card set -->
+	{#if cardSets.length > 0}
+		<div class="read-section">
+			<button class="read-button" on:click={openFirstCardSet}>
+				<i class="fas fa-book-open" />
+				Read
+			</button>
+		</div>
+	{/if}
 
 	{#if tabs.length > 1}
 		<div class="flex">
@@ -583,6 +625,47 @@
 		background: #3f4447;
 	}
 
+	/* Read button styles */
+	.read-section {
+		display: flex;
+		justify-content: center;
+		margin: 1rem 0;
+	}
+
+	.read-button {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1.5rem;
+		background: #28a745;
+		color: white;
+		border: none;
+		border-radius: 8px;
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	}
+
+	.read-button:hover {
+		background: #218838;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+	}
+
+	.read-button i {
+		font-size: 1.1rem;
+	}
+
+	.dark .read-button {
+		background: #2d5a3d;
+	}
+
+	.dark .read-button:hover {
+		background: #1e3d2a;
+	}
+
 	@media (max-width: 768px) {
 		.title {
 			font-size: 1.5rem;
@@ -599,6 +682,11 @@
 		.save-button,
 		.cancel-button {
 			width: 100%;
+		}
+
+		.read-button {
+			padding: 0.6rem 1.2rem;
+			font-size: 0.9rem;
 		}
 	}
 </style>

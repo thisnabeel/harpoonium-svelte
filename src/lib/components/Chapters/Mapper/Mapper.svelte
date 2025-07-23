@@ -876,6 +876,8 @@
 
 	.add-chapter-above-btn,
 	.add-chapter-below-btn {
+		position: absolute;
+		top: 39px;
 		width: 24px;
 		height: 24px;
 		border: none;
