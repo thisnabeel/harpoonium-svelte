@@ -28,6 +28,16 @@
 	let isProcessingBatch = false;
 	/** @type {number} */
 	let currentBatchIndex = 0;
+	/** @type {boolean} */
+	let showGutenbergScraper = false;
+	/** @type {string} */
+	let gutenbergUrl = '';
+	/** @type {boolean} */
+	let isScraping = false;
+	/** @type {string | null} */
+	let scrapingError = null;
+	/** @type {any} */
+	let scrapingResult = null;
 
 	onMount(async () => {
 		try {
@@ -376,6 +386,65 @@
 		showBatchMode = false;
 		batchChapters = [];
 	}
+
+	/**
+	 * Toggle Gutenberg scraper interface
+	 */
+	function toggleGutenbergScraper() {
+		showGutenbergScraper = !showGutenbergScraper;
+		if (showGutenbergScraper) {
+			gutenbergUrl = '';
+			scrapingError = null;
+			scrapingResult = null;
+		}
+	}
+
+	/**
+	 * Scrape chapters from Gutenberg URL
+	 */
+	async function scrapeGutenberg() {
+		if (!gutenbergUrl.trim()) {
+			alert('Please enter a valid Gutenberg URL');
+			return;
+		}
+
+		isScraping = true;
+		scrapingError = null;
+		scrapingResult = null;
+
+		try {
+			const response = await Api.post(`/chapters/${chapterId}/scrape_gutenberg`, {
+				url: gutenbergUrl.trim()
+			});
+
+			if (response.error) {
+				throw new Error(response.error);
+			}
+
+			scrapingResult = response;
+
+			// Refresh the chapter structure to show the new chapters
+			const refreshResponse = await Api.get(`/chapters/${chapterId}/nested_chapters`);
+			if (refreshResponse.error) {
+				throw new Error(refreshResponse.error);
+			}
+
+			book = refreshResponse.book;
+			currentChapter = refreshResponse.current_chapter;
+			tableOfContents = refreshResponse.table_of_contents;
+
+			// Close the scraper interface
+			showGutenbergScraper = false;
+			gutenbergUrl = '';
+
+			alert(`Successfully scraped ${response.total_chapters} chapters from Gutenberg!`);
+		} catch (err) {
+			scrapingError = err.message || 'Failed to scrape Gutenberg URL';
+			console.error('Failed to scrape Gutenberg:', err);
+		} finally {
+			isScraping = false;
+		}
+	}
 </script>
 
 <div class="mapper {$theme}">
@@ -390,6 +459,77 @@
 		</div>
 	{:else}
 		<div class="chapter-tree">
+			<!-- Gutenberg Scraper Section -->
+			<div class="gutenberg-scraper-section">
+				<div class="scraper-header">
+					<h4>📚 Gutenberg Book Scraper</h4>
+					<button
+						class="btn btn-outline-primary scraper-toggle-btn"
+						on:click={toggleGutenbergScraper}
+					>
+						{#if showGutenbergScraper}
+							<i class="fas fa-times" />
+							Hide Scraper
+						{:else}
+							<i class="fas fa-download" />
+							Import from Gutenberg
+						{/if}
+					</button>
+				</div>
+
+				{#if showGutenbergScraper}
+					<div class="scraper-interface">
+						<div class="scraper-info">
+							<p>
+								Enter a Project Gutenberg URL to automatically create chapters from the book
+								content.
+							</p>
+							<p class="scraper-note">
+								<strong>Note:</strong> The URL must contain h2 tags with "CHAPTER" followed by a number
+								(e.g., "CHAPTER 1", "CHAPTER II").
+							</p>
+						</div>
+
+						<div class="url-input-section">
+							<input
+								type="url"
+								class="gutenberg-url-input"
+								placeholder="https://www.gutenberg.org/files/1342/1342-h/1342-h.htm"
+								bind:value={gutenbergUrl}
+								disabled={isScraping}
+							/>
+							<button
+								class="btn btn-success scrape-btn"
+								on:click={scrapeGutenberg}
+								disabled={isScraping || !gutenbergUrl.trim()}
+							>
+								{#if isScraping}
+									<div class="spinner-small" />
+									Scraping...
+								{:else}
+									<i class="fas fa-magic" />
+									Scrape Chapters
+								{/if}
+							</button>
+						</div>
+
+						{#if scrapingError}
+							<div class="scraping-error">
+								<i class="fas fa-exclamation-triangle" />
+								{scrapingError}
+							</div>
+						{/if}
+
+						{#if scrapingResult}
+							<div class="scraping-success">
+								<i class="fas fa-check-circle" />
+								Successfully scraped {scrapingResult.total_chapters} chapters!
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
+
 			<!-- Book title and create buttons -->
 			<div class="book-header">
 				<div class="book-title">
@@ -542,6 +682,179 @@
 
 	.dark.mapper {
 		background: #1e2732;
+	}
+
+	/* Gutenberg Scraper Styles */
+	.gutenberg-scraper-section {
+		margin-bottom: 1.5rem;
+		padding: 1rem;
+		background: #f8f9fa;
+		border-radius: 6px;
+		border: 1px solid #e9ecef;
+	}
+
+	.dark .gutenberg-scraper-section {
+		background: #2f3336;
+		border-color: #3f4447;
+	}
+
+	.scraper-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+
+	.scraper-header h4 {
+		margin: 0;
+		color: #495057;
+		font-size: 1.1rem;
+		font-weight: 600;
+	}
+
+	.dark .scraper-header h4 {
+		color: #e7e9ea;
+	}
+
+	.scraper-toggle-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.4rem 0.8rem;
+		font-size: 0.85rem;
+		background-color: transparent;
+		border-color: #1d9bf0;
+		color: #1d9bf0;
+		border-radius: 4px;
+		transition: all 0.2s ease;
+	}
+
+	.scraper-toggle-btn:hover:not(:disabled) {
+		background-color: #1d9bf0;
+		color: white;
+	}
+
+	.scraper-interface {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.scraper-info {
+		color: #6c757d;
+		font-size: 0.9rem;
+	}
+
+	.dark .scraper-info {
+		color: #8899a6;
+	}
+
+	.scraper-info p {
+		margin: 0 0 0.5rem 0;
+	}
+
+	.scraper-note {
+		font-size: 0.85rem;
+		color: #dc3545;
+	}
+
+	.dark .scraper-note {
+		color: #ff6b6b;
+	}
+
+	.url-input-section {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.gutenberg-url-input {
+		flex: 1;
+		padding: 0.5rem;
+		border: 1px solid #ced4da;
+		border-radius: 4px;
+		font-size: 0.9rem;
+		background: white;
+		color: #495057;
+		transition: border-color 0.2s ease;
+	}
+
+	.dark .gutenberg-url-input {
+		background: #2f3336;
+		border-color: #3f4447;
+		color: #e7e9ea;
+	}
+
+	.gutenberg-url-input:focus {
+		outline: none;
+		border-color: #1d9bf0;
+		box-shadow: 0 0 0 2px rgba(29, 155, 240, 0.25);
+	}
+
+	.gutenberg-url-input:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.scrape-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 1rem;
+		font-size: 0.9rem;
+		font-weight: 500;
+		background-color: #28a745;
+		border-color: #28a745;
+		color: white;
+		border-radius: 4px;
+		transition: all 0.2s ease;
+		white-space: nowrap;
+	}
+
+	.scrape-btn:hover:not(:disabled) {
+		background-color: #218838;
+		border-color: #1e7e34;
+	}
+
+	.scrape-btn:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.scraping-error {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem;
+		background: #f8d7da;
+		border: 1px solid #f5c6cb;
+		border-radius: 4px;
+		color: #721c24;
+		font-size: 0.9rem;
+	}
+
+	.dark .scraping-error {
+		background: rgba(220, 53, 69, 0.1);
+		border-color: rgba(220, 53, 69, 0.3);
+		color: #ff6b6b;
+	}
+
+	.scraping-success {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem;
+		background: #d4edda;
+		border: 1px solid #c3e6cb;
+		border-radius: 4px;
+		color: #155724;
+		font-size: 0.9rem;
+	}
+
+	.dark .scraping-success {
+		background: rgba(40, 167, 69, 0.1);
+		border-color: rgba(40, 167, 69, 0.3);
+		color: #51cf66;
 	}
 
 	.book-header {
@@ -1003,6 +1316,27 @@
 	@media (max-width: 768px) {
 		.mapper {
 			padding: 0.5rem;
+		}
+
+		.scraper-header {
+			flex-direction: column;
+			gap: 1rem;
+			align-items: flex-start;
+		}
+
+		.scraper-toggle-btn {
+			width: 100%;
+			justify-content: center;
+		}
+
+		.url-input-section {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.scrape-btn {
+			width: 100%;
+			justify-content: center;
 		}
 
 		.book-header {

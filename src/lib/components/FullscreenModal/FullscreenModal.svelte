@@ -701,6 +701,8 @@
 		white-space: pre-wrap;
 		word-wrap: break-word;
 		font-weight: 400;
+
+		white-space: normal;
 	}
 
 	.fullscreen-card :global(*) {
@@ -843,6 +845,7 @@
 
 		.card-content {
 			font-size: 1.2rem;
+			white-space: normal;
 		}
 
 		.fullscreen-nav {
