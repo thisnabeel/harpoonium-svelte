@@ -24,6 +24,60 @@
 
 	let csrf;
 	let pageLoaded = false;
+
+	// Handle next chapter navigation
+	const handleNextChapter = async () => {
+		const modalData = $fullscreenModal;
+		console.log('handleNextChapter called with modal data:', modalData);
+
+		if (!modalData.currentChapter?.id) {
+			console.log('Missing current chapter ID');
+			return;
+		}
+
+		try {
+			// Call the next chapter API endpoint
+			console.log({ modalData });
+			const response = await Api.get(`/chapters/${modalData.currentChapter.id}/next_chapter`);
+			console.log('Next chapter API response:', response);
+
+			if (response.error) {
+				console.log('Next chapter API error:', response.error);
+				return;
+			}
+
+			// Create the card set from the API response
+			const nextCardSet = {
+				id: response.first_card_set.id,
+				title: response.first_card_set.title,
+				position: response.first_card_set.position,
+				cards: response.cards
+			};
+
+			// Create the next chapter object
+			const nextChapter = {
+				id: response.next_chapter.id,
+				title: response.next_chapter.title,
+				position: response.next_chapter.position,
+				slug: response.next_chapter.slug
+			};
+
+			console.log('Next chapter data:', { nextChapter, nextCardSet });
+
+			// Update the modal with the next chapter data
+			import('$lib/stores/fullscreenModal').then(({ openFullscreenModal }) => {
+				openFullscreenModal(
+					nextCardSet,
+					`${modalData.title.split(' - ')[0]} - ${nextChapter.title}`,
+					modalData.bookData, // Keep the same book data
+					nextChapter
+				);
+			});
+		} catch (error) {
+			console.error('Failed to navigate to next chapter:', error);
+		}
+	};
+
 	onMount(async function () {
 		// const csrfToken = document.querySelector('meta[name=csrf-token]').content;
 		// console.log(csrfToken)
@@ -84,6 +138,7 @@
 		bookData={$fullscreenModal.bookData}
 		currentChapter={$fullscreenModal.currentChapter}
 		onClose={closeFullscreenModal}
+		onNextChapter={handleNextChapter}
 	/>
 {/if}
 

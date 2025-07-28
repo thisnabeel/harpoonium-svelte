@@ -19,6 +19,12 @@
 		cardSet,
 		shouldRender: isOpen && cardSet
 	});
+	$: console.log('Next chapter button conditions:', {
+		isLastCard: currentCardIndex === cardSet?.cards?.length - 1,
+		hasNextChapter: !!onNextChapter,
+		onNextChapterType: typeof onNextChapter,
+		shouldShowNextChapter: currentCardIndex === cardSet?.cards?.length - 1 && onNextChapter
+	});
 
 	let currentCardIndex = 0;
 	let touchStartY = 0;
@@ -26,6 +32,9 @@
 	let showChapterDropdown = false;
 	let currentUser = null;
 	let saveCursorTimer = null; // Timer for debouncing cursor saves
+	let isRecapLoading = false;
+	let recapData = null;
+	let showRecapModal = false;
 
 	// Subscribe to user store
 	user.subscribe((value) => {
@@ -127,7 +136,7 @@
 	// Handle next chapter
 	const handleNextChapter = async () => {
 		if (onNextChapter && typeof onNextChapter === 'function') {
-			await saveUserCursorImmediate(); // Save current position before moving to next chapter
+			// await saveUserCursorImmediate(); // Save current position before moving to next chapter
 			onNextChapter();
 		}
 	};
@@ -231,7 +240,7 @@
 
 		try {
 			const response = await Api.get(
-				`/users/${currentUser.id}/cursor/${bookData.book_id || bookData.id}`
+				`/users/${currentUser.id}/cursor/${bookData?.current?.chapter?.id}`
 			);
 			if (response && response.card_id) {
 				// Find the card index for the saved card
@@ -292,6 +301,37 @@
 	const handleClose = async () => {
 		await saveUserCursorImmediate(); // Use immediate save for modal close
 		onClose();
+	};
+
+	// Load recap for current card
+	const loadRecap = async () => {
+		if (!cardSet?.cards || !cardSet.cards[currentCardIndex]) {
+			return;
+		}
+
+		const currentCard = cardSet.cards[currentCardIndex];
+		isRecapLoading = true;
+		recapData = null;
+
+		try {
+			const response = await Api.get(`/cards/${currentCard.id}/recap`);
+			if (response.error) {
+				throw new Error(response.error);
+			}
+			recapData = response;
+			showRecapModal = true;
+		} catch (error) {
+			console.error('Failed to load recap:', error);
+			alert('Failed to load recap. Please try again.');
+		} finally {
+			isRecapLoading = false;
+		}
+	};
+
+	// Close recap modal
+	const closeRecapModal = () => {
+		showRecapModal = false;
+		recapData = null;
 	};
 
 	// Cleanup on component destroy
@@ -391,6 +431,14 @@
 					{currentCardIndex + 1} / {cardSet.cards.length}
 				</div>
 
+				<button class="nav-button graph-btn" on:click={loadRecap}>
+					{#if isRecapLoading}
+						<div class="spinner-small" />
+					{:else}
+						<i class="fas fa-chart-line" />
+					{/if}
+				</button>
+
 				{#if currentCardIndex === cardSet.cards.length - 1 && onNextChapter}
 					<button class="nav-button next-chapter" on:click={() => handleNextChapter()}>
 						Next Chapter <i class="fas fa-arrow-right" />
@@ -410,6 +458,34 @@
 			<!-- <div class="fullscreen-instructions">
 				<p>Click upper/lower half • Swipe up/down • Arrow keys • Spacebar • ESC to exit</p>
 			</div> -->
+		</div>
+	</div>
+{/if}
+
+<!-- Recap Modal -->
+{#if showRecapModal && recapData}
+	<div class="recap-overlay" on:click={closeRecapModal}>
+		<div class="recap-modal" on:click|stopPropagation={() => {}}>
+			<div class="recap-header">
+				<h3>📖 Story Recap</h3>
+				<button class="recap-close" on:click={closeRecapModal}>
+					<i class="fas fa-times" />
+				</button>
+			</div>
+
+			<div class="recap-info">
+				<div class="recap-meta">
+					<span class="book-title">{recapData.book_title}</span>
+					<span class="chapter-title">{recapData.chapter_title}</span>
+					<span class="card-position"
+						>Card {recapData.card_position} of {recapData.total_cards_in_recap}</span
+					>
+				</div>
+			</div>
+
+			<div class="recap-content">
+				{recapData.recap}
+			</div>
 		</div>
 	</div>
 {/if}
@@ -762,6 +838,21 @@
 		box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
 	}
 
+	.nav-button.graph-btn {
+		background: linear-gradient(135deg, #6f42c1, #8e44ad);
+		font-weight: 600;
+		padding: 0.75rem 1rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.nav-button.graph-btn:hover {
+		background: linear-gradient(135deg, #5a32a3, #7d3c98);
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(111, 66, 193, 0.4);
+	}
+
 	.nav-indicator {
 		font-size: 1rem;
 		font-weight: 600;
@@ -863,6 +954,297 @@
 
 		.fullscreen-instructions p {
 			font-size: 0.8rem;
+		}
+
+		/* Recap Modal Mobile Styles */
+		.recap-modal {
+			max-width: 95%;
+			max-height: 90vh;
+			border-radius: 8px;
+		}
+
+		.recap-header {
+			padding: 1rem 1.5rem;
+		}
+
+		.recap-header h3 {
+			font-size: 1.1rem;
+		}
+
+		.recap-info {
+			padding: 0.8rem 1.5rem;
+		}
+
+		.recap-meta {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.5rem;
+		}
+
+		.recap-content {
+			padding: 1.5rem;
+			font-size: 0.9rem;
+		}
+	}
+
+	/* Recap Modal Styles */
+	.recap-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.8);
+		z-index: 3000;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1rem;
+		animation: fadeIn 0.3s ease;
+	}
+
+	.recap-modal {
+		background: #ffffff;
+		border-radius: 12px;
+		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+		max-width: 800px;
+		width: 100%;
+		max-height: 80vh;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	.dark .recap-modal {
+		background: #1a1d21;
+		border: 1px solid #2d3238;
+	}
+
+	.recap-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 1.5rem 2rem;
+		border-bottom: 1px solid #e1e5e9;
+		background: #f8f9fa;
+	}
+
+	.dark .recap-header {
+		background: #2d3238;
+		border-bottom-color: #3f4447;
+	}
+
+	.recap-header h3 {
+		margin: 0;
+		color: #1a1a1a;
+		font-size: 1.3rem;
+		font-weight: 600;
+	}
+
+	.dark .recap-header h3 {
+		color: #ffffff;
+	}
+
+	.recap-close {
+		background: none;
+		border: none;
+		color: #6c757d;
+		cursor: pointer;
+		padding: 0.5rem;
+		border-radius: 4px;
+		transition: all 0.2s ease;
+		font-size: 1.2rem;
+	}
+
+	.recap-close:hover {
+		background: rgba(108, 117, 125, 0.1);
+		color: #495057;
+	}
+
+	.dark .recap-close {
+		color: #8899a6;
+	}
+
+	.dark .recap-close:hover {
+		background: rgba(136, 153, 166, 0.1);
+		color: #e7e9ea;
+	}
+
+	.recap-info {
+		padding: 1rem 2rem;
+		background: #ffffff;
+		border-bottom: 1px solid #e1e5e9;
+	}
+
+	.dark .recap-info {
+		background: #1a1d21;
+		border-bottom-color: #2d3238;
+	}
+
+	.recap-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1rem;
+		align-items: center;
+	}
+
+	.book-title {
+		font-weight: 600;
+		color: #1d9bf0;
+		font-size: 1rem;
+	}
+
+	.dark .book-title {
+		color: #1d9bf0;
+	}
+
+	.chapter-title {
+		font-weight: 500;
+		color: #495057;
+		font-size: 0.95rem;
+	}
+
+	.dark .chapter-title {
+		color: #e7e9ea;
+	}
+
+	.card-position {
+		background: #e9ecef;
+		color: #495057;
+		padding: 0.25rem 0.75rem;
+		border-radius: 20px;
+		font-size: 0.85rem;
+		font-weight: 500;
+	}
+
+	.dark .card-position {
+		background: #3f4447;
+		color: #e7e9ea;
+	}
+
+	.recap-content {
+		flex: 1;
+		padding: 2rem;
+		overflow-y: auto;
+		line-height: 1.7;
+		font-size: 1rem;
+		color: #1a1a1a;
+		white-space: pre-wrap;
+		word-wrap: break-word;
+	}
+
+	.dark .recap-content {
+		color: #e7e9ea;
+		background: #1a1d21;
+	}
+
+	/* Scrollbar styles for recap content */
+	.recap-content::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	.recap-content::-webkit-scrollbar-track {
+		background: #f1f1f1;
+		border-radius: 4px;
+	}
+
+	.dark .recap-content::-webkit-scrollbar-track {
+		background: #2d3238;
+	}
+
+	.recap-content::-webkit-scrollbar-thumb {
+		background: #c1c1c1;
+		border-radius: 4px;
+	}
+
+	.dark .recap-content::-webkit-scrollbar-thumb {
+		background: #5a6268;
+	}
+
+	.recap-content::-webkit-scrollbar-thumb:hover {
+		background: #a8a8a8;
+	}
+
+	.dark .recap-content::-webkit-scrollbar-thumb:hover {
+		background: #6c757d;
+	}
+
+	@media (max-width: 768px) {
+		.recap-modal {
+			max-width: 90%;
+			max-height: 90%;
+			border-radius: 8px;
+			box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+		}
+
+		.recap-header {
+			padding: 1rem 1.5rem;
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.5rem;
+		}
+
+		.recap-header h3 {
+			font-size: 1.1rem;
+		}
+
+		.recap-close {
+			align-self: flex-end;
+		}
+
+		.recap-info {
+			padding: 0.8rem 1.5rem;
+		}
+
+		.recap-meta {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.5rem;
+		}
+
+		.book-title {
+			font-size: 0.9rem;
+		}
+
+		.chapter-title {
+			font-size: 0.85rem;
+		}
+
+		.card-position {
+			font-size: 0.75rem;
+		}
+
+		.recap-content {
+			padding: 1.5rem;
+			font-size: 0.9rem;
+		}
+
+		.recap-content::-webkit-scrollbar {
+			width: 6px;
+		}
+
+		.recap-content::-webkit-scrollbar-track {
+			background: #f1f1f1;
+		}
+
+		.dark .recap-content::-webkit-scrollbar-track {
+			background: #2d3238;
+		}
+
+		.recap-content::-webkit-scrollbar-thumb {
+			background: #c1c1c1;
+		}
+
+		.dark .recap-content::-webkit-scrollbar-thumb {
+			background: #5a6268;
+		}
+
+		.recap-content::-webkit-scrollbar-thumb:hover {
+			background: #a8a8a8;
+		}
+
+		.dark .recap-content::-webkit-scrollbar-thumb:hover {
+			background: #6c757d;
 		}
 	}
 </style>
