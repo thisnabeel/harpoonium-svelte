@@ -88,6 +88,119 @@
 		}
 	};
 
+	// Sentence segmentation tuned for book prose
+	function splitIntoSentences(content) {
+		const ABBRS = [
+			'Mr',
+			'Mrs',
+			'Ms',
+			'Mx',
+			'Dr',
+			'Prof',
+			'Sr',
+			'Jr',
+			'St',
+			'Mt',
+			'Messrs',
+			'Mmes',
+			'Rev',
+			'Hon',
+			'Pres',
+			'Gov',
+			'Sen',
+			'Rep',
+			'Gen',
+			'Adm',
+			'Capt',
+			'Sgt',
+			'Col',
+			'Maj',
+			'Lt',
+			'Br',
+			'Fr',
+			'Ave',
+			'Blvd',
+			'Rd',
+			'No',
+			'Dept',
+			'Est',
+			'Fig',
+			'Vol',
+			'Ch',
+			'pp',
+			'p',
+			'vs',
+			'etc',
+			'e.g',
+			'i.e',
+			'U.S',
+			'U.K',
+			'U.N'
+		];
+
+		const DOT = '§§DOT§§',
+			ELLIP = '§§ELLIP§§',
+			PARA = '§§PARA§§';
+
+		// --- normalize & join soft wraps (keep paragraph breaks) ---
+		let t = (content || '').replace(/\r\n?/g, '\n');
+		t = t
+			.replace(/\n{2,}/g, PARA)
+			.replace(/\n/g, ' ')
+			.replace(new RegExp(PARA, 'g'), '\n\n');
+
+		// --- protect non-terminal periods ---
+		t = t
+			.replace(/\.\.\./g, ELLIP)
+			.replace(/\b([A-Z]\.){2,}(?=\W|$)/g, (m) => m.replaceAll('.', DOT))
+			.replace(/\b([A-Z])\.(?=\s+[A-Z][a-z])/g, `$1${DOT}`)
+			.replace(
+				new RegExp(`\\b(?:${ABBRS.map((a) => a.replace(/\./g, '\\.')).join('|')})\\.`, 'g'),
+				(m) => m.replace('.', DOT)
+			)
+			.replace(/(\d)\.(\d)/g, `$1${DOT}$2`);
+
+		// --- sentence boundaries ---
+		t = t
+			.replace(/\n{2,}/g, '\n\n|') // paragraph = hard boundary
+			.replace(/([.!?]|§§ELLIP§§)([”"'\)\]]*)\s+(?=(?:[“"'(\[]*[A-Z0-9]))/g, '$1$2|');
+
+		// --- split & restore ---
+		const sentences = t
+			.split('|')
+			.map((s) => s.replaceAll(DOT, '.').replaceAll(ELLIP, '...').trim())
+			.filter((s) => s.length > 0);
+
+		// ---- helper: is a full quoted sentence? ----
+		const OPEN = `“"‘'`;
+		const CLOSE = `”"’'`;
+		const isQuoted = (s) => {
+			if (!s) return false;
+			const start = s.trim()[0];
+			const end = s.trim().slice(-1);
+			return OPEN.includes(start) && (CLOSE.includes(end) || /[.!?][”"’']$/.test(s.trim()));
+		};
+
+		// --- merge pattern: quoted → narration → quoted ---
+		const merged = [];
+		for (let i = 0; i < sentences.length; i++) {
+			const a = sentences[i];
+			const b = sentences[i + 1];
+			const c = sentences[i + 2];
+
+			if (isQuoted(a) && b && !isQuoted(b) && c && isQuoted(c)) {
+				const combo = `${a} ${b} ${c}`.replace(/\s+/g, ' ').trim();
+				merged.push(combo);
+				i += 2; // skip b & c (consumed)
+			} else {
+				merged.push(a);
+			}
+		}
+
+		// --- shape cards (preserve short quoted replies; no min length) ---
+		return merged.map((body, idx) => ({ body, position: idx + 1 }));
+	}
+
 	// Generate card set from chapter body (like Reader)
 	const generateCardSet = async () => {
 		if (!chapter?.id) return;
@@ -106,15 +219,7 @@
 			}
 
 			// Split by sentences (like Reader does)
-			const sentences = content
-				.replace(/([.!?])\s*(?=[A-Z])/g, '$1|') // Split on sentence endings followed by capital letters
-				.split('|')
-				.map((/** @type {string} */ sentence) => sentence.trim())
-				.filter((/** @type {string} */ sentence) => sentence.length > 10) // Filter out very short fragments
-				.map((/** @type {string} */ sentence, /** @type {number} */ index) => ({
-					body: sentence,
-					position: index + 1
-				}));
+			const sentences = splitIntoSentences(content);
 
 			// Create a new card set
 			const cardSetResponse = await Api.post('/card_sets', {
