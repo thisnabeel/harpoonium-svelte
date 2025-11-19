@@ -32,9 +32,43 @@
 	let showChapterDropdown = false;
 	let currentUser = null;
 	let saveCursorTimer = null; // Timer for debouncing cursor saves
+	let loadTagsTimer = null; // Timer for debouncing tag loads
+	let lastNavigationTime = 0; // Track last navigation time for throttling
 	let isRecapLoading = false;
 	let recapData = null;
 	let showRecapModal = false;
+
+	// Tag management
+	let showTagModal = false;
+	let availableTags = [];
+	let currentCardTags = [];
+	let selectedTagId = null;
+	let isLoadingTags = false;
+	let isSavingTag = false;
+	let tagLoadError = null;
+	let isLoadingCardTags = false; // Flag to prevent multiple simultaneous tag loads
+	let allCardTags = {}; // Map of card_id -> tag for the entire card set
+	let isLoadingAllTags = false;
+	let loadedCardSetId = null; // Track which cardSet we've loaded tags for
+
+	// Color mapping for tag types (enhanced color scheme for better contrast and visual appeal)
+	const tagColors = {
+		'Description / Worldbuilding': '#5dade2', // Vibrant Sky Blue
+		'Character Thoughts & Feelings': '#e74c3c', // Bright Red
+		'Social Commentary / Philosophy': '#9b59b6', // Rich Purple
+		'Plot Movement': '#2ecc71', // Fresh Green
+		'Tension Build-Up': '#f39c12', // Energetic Orange
+		'Action / Drama': '#e67e22', // Deep Orange
+		'Reveals & Twists': '#c0392b', // Intense Red
+		Dialogue: '#3498db', // Clear Blue
+		'Atmospheric / Mood Setting': '#8e44ad', // Deep Purple
+		'Transitional Passage': '#95a5a6', // Neutral Gray
+		'Symbolic / Metaphorical Passage': '#1abc9c', // Bright Teal
+		'Reflection / Moral Lesson': '#27ae60' // Forest Green
+	};
+
+	// Default color for untagged cards
+	const defaultTagColor = '#bdc3c7'; // Light gray
 
 	// Subscribe to user store
 	user.subscribe((value) => {
@@ -63,7 +97,7 @@
 			clearTimeout(saveCursorTimer);
 		}
 
-		// Set new timer - save cursor after 500ms of no navigation
+		// Set new timer - save cursor after 2 seconds of no navigation (allows fast navigation)
 		saveCursorTimer = setTimeout(async () => {
 			try {
 				await Api.post('/cards/update_cursor', {
@@ -80,7 +114,7 @@
 			} catch (error) {
 				console.error('Failed to save user cursor:', error);
 			}
-		}, 1000); // 500ms delay
+		}, 2000); // 2 second delay to allow fast navigation
 	};
 
 	// Force save cursor immediately (for chapter switching and modal close)
@@ -117,20 +151,51 @@
 		}
 	};
 
-	// Navigate to next card
-	const nextCard = async () => {
+	// Navigate to next card (with throttling to prevent rapid clicks)
+	const nextCard = () => {
+		const now = Date.now();
+		// Throttle navigation to max once per 100ms to prevent glitches
+		if (now - lastNavigationTime < 100) {
+			return;
+		}
+		lastNavigationTime = now;
+
 		if (cardSet?.cards && currentCardIndex < cardSet.cards.length - 1) {
 			currentCardIndex++;
-			await saveUserCursor();
+			saveUserCursor(); // Don't await - let it debounce in background
 		}
 	};
 
-	// Navigate to previous card
-	const prevCard = async () => {
+	// Navigate to previous card (with throttling to prevent rapid clicks)
+	const prevCard = () => {
+		const now = Date.now();
+		// Throttle navigation to max once per 100ms to prevent glitches
+		if (now - lastNavigationTime < 100) {
+			return;
+		}
+		lastNavigationTime = now;
+
 		if (currentCardIndex > 0) {
 			currentCardIndex--;
-			await saveUserCursor();
+			saveUserCursor(); // Don't await - let it debounce in background
 		}
+	};
+
+	// Navigate to a specific card by index
+	const navigateToCard = (targetIndex) => {
+		if (!cardSet?.cards || targetIndex < 0 || targetIndex >= cardSet.cards.length) {
+			return;
+		}
+
+		const now = Date.now();
+		// Throttle navigation to max once per 100ms to prevent glitches
+		if (now - lastNavigationTime < 100) {
+			return;
+		}
+		lastNavigationTime = now;
+
+		currentCardIndex = targetIndex;
+		saveUserCursor(); // Don't await - let it debounce in background
 	};
 
 	// Handle next chapter
@@ -168,15 +233,15 @@
 	};
 
 	// Handle keyboard navigation
-	const handleKeydown = async (event) => {
+	const handleKeydown = (event) => {
 		if (!isOpen) return;
 
 		if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'ArrowDown') {
 			event.preventDefault();
-			await nextCard();
+			nextCard(); // Don't await - allow fast navigation
 		} else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
 			event.preventDefault();
-			await prevCard();
+			prevCard(); // Don't await - allow fast navigation
 		} else if (event.key === 'Escape') {
 			event.preventDefault();
 			onClose();
@@ -199,23 +264,23 @@
 		handleSwipe();
 	};
 
-	const handleSwipe = async () => {
+	const handleSwipe = () => {
 		const swipeThreshold = 50;
 		const swipeDistance = touchStartY - touchEndY;
 
 		if (Math.abs(swipeDistance) > swipeThreshold) {
 			if (swipeDistance > 0) {
 				// Swipe up - next card
-				await nextCard();
+				nextCard(); // Don't await - allow fast navigation
 			} else {
 				// Swipe down - previous card
-				await prevCard();
+				prevCard(); // Don't await - allow fast navigation
 			}
 		}
 	};
 
 	// Handle mouse click navigation
-	const handleCardClick = async (event) => {
+	const handleCardClick = (event) => {
 		if (!isOpen) return;
 
 		const cardElement = event.currentTarget;
@@ -225,10 +290,10 @@
 
 		if (clickY < cardCenterY) {
 			// Click in upper half - previous card
-			await prevCard();
+			prevCard(); // Don't await - allow fast navigation
 		} else {
 			// Click in lower half - next card
-			await nextCard();
+			nextCard(); // Don't await - allow fast navigation
 		}
 	};
 
@@ -266,8 +331,19 @@
 		document.body.style.overflow = 'hidden';
 		// Load user's saved position
 		loadUserCursor();
+
+		// Only load tags if we haven't loaded them for this cardSet yet
+		const currentCardSetId = cardSet.id || cardSet.cards[0]?.id;
+		if (currentCardSetId !== loadedCardSetId) {
+			loadedCardSetId = currentCardSetId;
+			// Load all card tags for progress bar coloring (only once per cardSet)
+			loadAllCardTags();
+		}
 	} else if (!isOpen && typeof document !== 'undefined') {
 		document.body.style.overflow = '';
+		// Clear tag map and loaded cardSet ID when modal closes
+		allCardTags = {};
+		loadedCardSetId = null;
 	}
 
 	// Add keyboard event listener
@@ -334,6 +410,357 @@
 		recapData = null;
 	};
 
+	// Load available tags
+	const loadAvailableTags = async () => {
+		try {
+			isLoadingTags = true;
+			tagLoadError = null;
+			const response = await Api.get('/tags?tag_type=passage_type');
+			console.log('Tags API response:', response);
+			// Handle both array response and object with data property
+			if (Array.isArray(response)) {
+				availableTags = response;
+			} else if (response && Array.isArray(response.data)) {
+				availableTags = response.data;
+			} else if (response && response.tags) {
+				availableTags = response.tags;
+			} else {
+				availableTags = [];
+			}
+			console.log('Available tags set to:', availableTags);
+			if (availableTags.length === 0) {
+				tagLoadError = 'No tags found. Make sure tags are seeded in the database.';
+			}
+		} catch (error) {
+			console.error('Failed to load tags:', error);
+			console.error('Error details:', error.response || error.message);
+			availableTags = [];
+			tagLoadError =
+				error.response?.data?.error ||
+				error.message ||
+				'Failed to load categories. Please try again.';
+		} finally {
+			isLoadingTags = false;
+		}
+	};
+
+	// Load current card tags (with debouncing to prevent rapid calls)
+	const loadCurrentCardTags = async () => {
+		if (!cardSet?.cards || !cardSet.cards[currentCardIndex]) {
+			currentCardTags = [];
+			selectedTagId = null;
+			return;
+		}
+
+		// Prevent multiple simultaneous loads
+		if (isLoadingCardTags) {
+			return;
+		}
+
+		const currentCard = cardSet.cards[currentCardIndex];
+
+		// If card already has tags in cardSet, use those instead of fetching
+		if (currentCard.tags && currentCard.tags.length > 0) {
+			currentCardTags = currentCard.tags;
+			const passageTypeTag = currentCardTags.find((tag) => tag.tag_type === 'passage_type');
+			selectedTagId = passageTypeTag ? passageTypeTag.id : null;
+
+			// Update allCardTags for progress bar if not already there
+			if (passageTypeTag && !allCardTags[currentCard.id]) {
+				allCardTags[currentCard.id] = passageTypeTag;
+			}
+			return;
+		}
+
+		// Only fetch if card doesn't have tags loaded
+		isLoadingCardTags = true;
+
+		try {
+			// Fetch the card with tags
+			const cardResponse = await Api.get(`/cards/${currentCard.id}`);
+			currentCardTags = cardResponse.tags || [];
+			// Update the card in cardSet with tags
+			cardSet.cards[currentCardIndex] = cardResponse;
+			// Update the tag in allCardTags for progress bar
+			const passageTypeTag = currentCardTags.find((tag) => tag.tag_type === 'passage_type');
+			if (passageTypeTag) {
+				allCardTags[currentCard.id] = passageTypeTag;
+			} else {
+				delete allCardTags[currentCard.id];
+			}
+			selectedTagId = passageTypeTag ? passageTypeTag.id : null;
+		} catch (error) {
+			console.error('Failed to load card tags:', error);
+			currentCardTags = [];
+			selectedTagId = null;
+		} finally {
+			isLoadingCardTags = false;
+		}
+	};
+
+	// Debounced version of loadCurrentCardTags for reactive statements
+	const loadCurrentCardTagsDebounced = () => {
+		// Clear existing timer
+		if (loadTagsTimer) {
+			clearTimeout(loadTagsTimer);
+		}
+
+		// Set new timer - load tags after 300ms of no navigation
+		loadTagsTimer = setTimeout(() => {
+			loadCurrentCardTags();
+		}, 300);
+	};
+
+	// Load all card tags for the entire card set (for progress bar coloring)
+	const loadAllCardTags = async () => {
+		if (!cardSet?.cards || cardSet.cards.length === 0 || isLoadingAllTags) {
+			return;
+		}
+
+		// Double-check we haven't already loaded tags for this cardSet
+		const currentCardSetId = cardSet.id || cardSet.cards[0]?.id;
+		if (currentCardSetId === loadedCardSetId && Object.keys(allCardTags).length > 0) {
+			console.log('Tags already loaded for this cardSet, skipping...');
+			return;
+		}
+
+		isLoadingAllTags = true;
+
+		// Load in background without blocking UI
+		setTimeout(async () => {
+			try {
+				// First, check if cards already have tags loaded
+				const tagMap = {};
+				let needsLoading = false;
+
+				cardSet.cards.forEach((card) => {
+					if (card.tags && card.tags.length > 0) {
+						const passageTypeTag = card.tags.find((tag) => tag.tag_type === 'passage_type');
+						if (passageTypeTag) {
+							tagMap[card.id] = passageTypeTag;
+						}
+					} else {
+						needsLoading = true;
+					}
+				});
+
+				// If some cards don't have tags, use bulk endpoint to load them all at once
+				if (needsLoading && cardSet.id) {
+					try {
+						// Use bulk endpoint to get all tags in one request
+						const response = await Api.get(`/card_sets/${cardSet.id}/card_tags`);
+						if (response && response.tags) {
+							// Merge bulk-loaded tags with any already-loaded tags
+							Object.assign(tagMap, response.tags);
+							console.log(
+								'Loaded tags via bulk endpoint:',
+								Object.keys(response.tags).length,
+								'tags'
+							);
+						}
+					} catch (error) {
+						console.error(
+							'Failed to load tags via bulk endpoint, falling back to individual requests:',
+							error
+						);
+						// Fallback to individual requests if bulk endpoint fails
+						const cardIds = cardSet.cards
+							.filter((card) => !card.tags || card.tags.length === 0)
+							.map((card) => card.id);
+
+						// Process in smaller batches as fallback
+						const batchSize = 10;
+						for (let i = 0; i < cardIds.length; i += batchSize) {
+							const batch = cardIds.slice(i, i + batchSize);
+							const batchPromises = batch.map(async (cardId) => {
+								try {
+									const cardResponse = await Api.get(`/cards/${cardId}`);
+									return { cardId, tags: cardResponse.tags || [] };
+								} catch (error) {
+									console.error(`Failed to load tags for card ${cardId}:`, error);
+									return { cardId, tags: [] };
+								}
+							});
+
+							const batchResults = await Promise.all(batchPromises);
+							batchResults.forEach(({ cardId, tags }) => {
+								const passageTypeTag = tags.find((tag) => tag.tag_type === 'passage_type');
+								if (passageTypeTag) {
+									tagMap[cardId] = passageTypeTag;
+								}
+							});
+						}
+					}
+				}
+
+				allCardTags = tagMap;
+				console.log('Loaded all card tags:', Object.keys(allCardTags).length, 'tags');
+			} catch (error) {
+				console.error('Failed to load all card tags:', error);
+			} finally {
+				isLoadingAllTags = false;
+			}
+		}, 100); // Small delay to let UI render first
+	};
+
+	// Get color for a specific card
+	const getCardColor = (cardId) => {
+		const tag = allCardTags[cardId];
+		if (tag && tag.name) {
+			return tagColors[tag.name] || defaultTagColor;
+		}
+		return defaultTagColor;
+	};
+
+	// Helper function to adjust color brightness for gradients
+	const adjustColorBrightness = (hex, percent) => {
+		if (!hex) return '#000000';
+
+		// Remove # if present
+		hex = hex.replace('#', '');
+
+		// Convert to RGB
+		const r = parseInt(hex.substr(0, 2), 16);
+		const g = parseInt(hex.substr(2, 2), 16);
+		const b = parseInt(hex.substr(4, 2), 16);
+
+		// Adjust brightness (percent can be negative to darken)
+		const newR = Math.max(0, Math.min(255, Math.round(r + (r * percent) / 100)));
+		const newG = Math.max(0, Math.min(255, Math.round(g + (g * percent) / 100)));
+		const newB = Math.max(0, Math.min(255, Math.round(b + (b * percent) / 100)));
+
+		// Convert back to hex
+		const toHex = (n) => {
+			const hex = n.toString(16);
+			return hex.length === 1 ? '0' + hex : hex;
+		};
+
+		return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
+	};
+
+	// Generate progress bar segments
+	$: progressSegments = (() => {
+		if (!cardSet?.cards || cardSet.cards.length === 0) {
+			return [];
+		}
+
+		const segments = [];
+		const totalCards = cardSet.cards.length;
+		const segmentWidth = 100 / totalCards;
+
+		cardSet.cards.forEach((card, index) => {
+			const tag = allCardTags[card.id];
+			const hasTag = tag && tag.name;
+			const color = getCardColor(card.id);
+			segments.push({
+				index,
+				width: segmentWidth,
+				left: (index / totalCards) * 100,
+				color,
+				cardId: card.id,
+				hasTag
+			});
+		});
+
+		return segments;
+	})();
+
+	// Open tag modal
+	const openTagModal = async () => {
+		showTagModal = true;
+		tagLoadError = null;
+		availableTags = [];
+		await loadAvailableTags();
+		await loadCurrentCardTags();
+	};
+
+	// Close tag modal
+	const closeTagModal = () => {
+		showTagModal = false;
+		selectedTagId = null;
+	};
+
+	// Save tag
+	const saveTag = async () => {
+		if (!cardSet?.cards || !cardSet.cards[currentCardIndex]) {
+			return;
+		}
+
+		const currentCard = cardSet.cards[currentCardIndex];
+		isSavingTag = true;
+
+		try {
+			await Api.post(`/cards/${currentCard.id}/update_tag`, {
+				tag_id: selectedTagId
+			});
+
+			// Reload the card to get updated tags
+			await loadCurrentCardTags();
+
+			// Update the card in the cardSet
+			const updatedCard = await Api.get(`/cards/${currentCard.id}`);
+			cardSet.cards[currentCardIndex] = updatedCard;
+
+			// Update the tag in allCardTags for progress bar
+			const passageTypeTag = updatedCard.tags?.find((tag) => tag.tag_type === 'passage_type');
+			if (passageTypeTag) {
+				allCardTags[currentCard.id] = passageTypeTag;
+			} else {
+				delete allCardTags[currentCard.id];
+			}
+
+			closeTagModal();
+		} catch (error) {
+			console.error('Failed to save tag:', error);
+			alert('Failed to save tag. Please try again.');
+		} finally {
+			isSavingTag = false;
+		}
+	};
+
+	// Get current card's tag name
+	$: currentTagName = (() => {
+		if (!cardSet?.cards || !cardSet.cards[currentCardIndex]) return null;
+		const card = cardSet.cards[currentCardIndex];
+		if (card.tags && card.tags.length > 0) {
+			const passageTypeTag = card.tags.find((tag) => tag.tag_type === 'passage_type');
+			return passageTypeTag ? passageTypeTag.name : null;
+		}
+		return null;
+	})();
+
+	// Get current card's tag color
+	$: currentTagColor = (() => {
+		if (!cardSet?.cards || !cardSet.cards[currentCardIndex]) return null;
+		const card = cardSet.cards[currentCardIndex];
+		const cardId = card.id;
+		const tag = allCardTags[cardId];
+		if (tag && tag.name && tagColors[tag.name]) {
+			return tagColors[tag.name];
+		}
+		return null;
+	})();
+
+	// Reload card tags when card changes (with debouncing)
+	let lastCardId = null;
+	$: if (cardSet?.cards && cardSet.cards[currentCardIndex] && isOpen) {
+		const currentCardId = cardSet.cards[currentCardIndex]?.id;
+		if (currentCardId && currentCardId !== lastCardId) {
+			lastCardId = currentCardId;
+			// Only load if card doesn't already have tags - use cached data when available
+			const currentCard = cardSet.cards[currentCardIndex];
+			if (!currentCard.tags || currentCard.tags.length === 0) {
+				// Use debounced version to prevent rapid calls during fast navigation
+				loadCurrentCardTagsDebounced();
+			} else {
+				// Use cached tags
+				currentCardTags = currentCard.tags;
+				const passageTypeTag = currentCardTags.find((tag) => tag.tag_type === 'passage_type');
+				selectedTagId = passageTypeTag ? passageTypeTag.id : null;
+			}
+		}
+	}
+
 	// Cleanup on component destroy
 	onDestroy(() => {
 		if (typeof document !== 'undefined') {
@@ -342,10 +769,14 @@
 			document.body.style.overflow = '';
 		}
 
-		// Clear any pending cursor save timer
+		// Clear any pending timers
 		if (saveCursorTimer) {
 			clearTimeout(saveCursorTimer);
 			saveCursorTimer = null;
+		}
+		if (loadTagsTimer) {
+			clearTimeout(loadTagsTimer);
+			loadTagsTimer = null;
 		}
 	});
 </script>
@@ -394,11 +825,34 @@
 				</button>
 			</div>
 
-			<!-- Progress bar -->
+			<!-- Progress bar with color-coded segments -->
 			<div class="progress-container">
 				<div class="progress-bar">
+					{#each progressSegments as segment}
+						<div
+							class="progress-segment"
+							class:passed={segment.index < currentCardIndex}
+							class:current={segment.index === currentCardIndex}
+							class:untagged={!segment.hasTag}
+							style="width: {segment.width}%; left: {segment.left}%; background-color: {segment.color};"
+							title={(() => {
+								const tag = allCardTags[segment.cardId];
+								return tag ? tag.name : 'Untagged';
+							})()}
+							on:click={() => navigateToCard(segment.index)}
+							role="button"
+							tabindex="0"
+							on:keydown={(e) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
+									navigateToCard(segment.index);
+								}
+							}}
+						/>
+					{/each}
+					<!-- Progress indicator showing how far we've read -->
 					<div
-						class="progress-fill"
+						class="progress-indicator"
 						style="width: {((currentCardIndex + 1) / cardSet.cards.length) * 100}%"
 					/>
 				</div>
@@ -430,6 +884,20 @@
 				<div class="nav-indicator">
 					{currentCardIndex + 1} / {cardSet.cards.length}
 				</div>
+
+				<button
+					class="nav-button category-btn"
+					class:has-tag={currentTagColor}
+					on:click={openTagModal}
+					style={currentTagColor
+						? `background: ${currentTagColor}; background: linear-gradient(135deg, ${currentTagColor}, ${adjustColorBrightness(
+								currentTagColor,
+								-20
+						  )});`
+						: ''}
+				>
+					{currentTagName || 'category'}
+				</button>
 
 				<button class="nav-button graph-btn" on:click={loadRecap}>
 					{#if isRecapLoading}
@@ -485,6 +953,64 @@
 
 			<div class="recap-content">
 				{recapData.recap}
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Tag Selection Modal -->
+{#if showTagModal}
+	<div class="tag-overlay" on:click={closeTagModal}>
+		<div class="tag-modal" on:click|stopPropagation={() => {}}>
+			<div class="tag-header">
+				<h3>Select Category</h3>
+				<button class="tag-close" on:click={closeTagModal}>
+					<i class="fas fa-times" />
+				</button>
+			</div>
+
+			<div class="tag-content">
+				{#if isLoadingTags}
+					<div class="tag-loading">
+						<div class="spinner-small" />
+						<span>Loading categories...</span>
+					</div>
+				{:else if tagLoadError}
+					<div class="tag-error">
+						<div class="tag-error-icon">⚠️</div>
+						<div class="tag-error-message">{tagLoadError}</div>
+						<button class="tag-retry-button" on:click={loadAvailableTags}> Retry </button>
+					</div>
+				{:else if availableTags.length === 0}
+					<div class="tag-empty">No categories available</div>
+				{:else}
+					<div class="tag-list">
+						{#each availableTags as tag}
+							<button
+								class="tag-option"
+								class:selected={selectedTagId === tag.id}
+								on:click={() => (selectedTagId = tag.id)}
+							>
+								<div class="tag-name">{tag.name}</div>
+								{#if tag.description}
+									<div class="tag-description">{tag.description}</div>
+								{/if}
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
+			<div class="tag-footer">
+				<button class="tag-button tag-button-cancel" on:click={closeTagModal}> Cancel </button>
+				<button class="tag-button tag-button-save" on:click={saveTag} disabled={isSavingTag}>
+					{#if isSavingTag}
+						<div class="spinner-small" />
+						<span>Saving...</span>
+					{:else}
+						Save
+					{/if}
+				</button>
 			</div>
 		</div>
 	</div>
@@ -721,33 +1247,115 @@
 
 	.progress-bar {
 		width: 100%;
-		height: 4px;
+		height: 8px;
 		background: #e1e5e9;
-		border-radius: 2px;
-		overflow: hidden;
+		border-radius: 4px;
+		overflow: visible;
+		position: relative;
+		box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 	}
 
 	.dark .progress-bar {
-		background: #2d3238;
+		background: #1a1d21;
+		box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
 	}
 
-	.progress-fill {
+	.progress-segment {
 		height: 100%;
-		background: linear-gradient(90deg, #007bff, #0056b3);
-		border-radius: 2px;
-		transition: width 0.3s ease;
-		position: relative;
+		position: absolute;
+		top: 0;
+		opacity: 0.85;
+		transition: all 0.2s ease;
+		cursor: pointer;
+		border-right: 1px solid rgba(0, 0, 0, 0.15);
+		border-left: 1px solid rgba(255, 255, 255, 0.2);
+		z-index: 2;
+		box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
+		user-select: none;
 	}
 
-	.progress-fill::after {
-		content: '';
+	.progress-segment:active {
+		transform: scaleY(0.95);
+		opacity: 0.7;
+	}
+
+	.dark .progress-segment {
+		border-right-color: rgba(255, 255, 255, 0.15);
+		border-left-color: rgba(0, 0, 0, 0.3);
+		opacity: 0.9;
+		box-shadow: 0 0 3px rgba(0, 0, 0, 0.5), inset 0 0 2px rgba(255, 255, 255, 0.1);
+	}
+
+	.progress-segment.untagged {
+		background-color: rgb(189 195 199 / 50%) !important;
+		opacity: 0.5;
+	}
+
+	.dark .progress-segment.untagged {
+		background-color: rgb(189 195 199 / 40%) !important;
+		opacity: 0.4;
+	}
+
+	.progress-segment:hover {
+		opacity: 1;
+		transform: scaleY(1.4);
+		z-index: 10;
+		box-shadow: 0 0 8px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.2);
+	}
+
+	.dark .progress-segment:hover {
+		opacity: 1;
+		box-shadow: 0 0 10px rgba(255, 255, 255, 0.3), 0 2px 6px rgba(0, 0, 0, 0.5);
+	}
+
+	.progress-segment.passed {
+		opacity: 0.95;
+		filter: brightness(0.9);
+	}
+
+	.dark .progress-segment.passed {
+		opacity: 1;
+		filter: brightness(0.85);
+	}
+
+	.progress-segment.current {
+		opacity: 1;
+		box-shadow: 0 0 10px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 255, 255, 0.3),
+			inset 0 0 4px rgba(255, 255, 255, 0.4);
+		z-index: 5;
+		border: 2px solid rgba(255, 255, 255, 0.6);
+		transform: scaleY(1.2);
+		filter: brightness(1.1);
+	}
+
+	.dark .progress-segment.current {
+		box-shadow: 0 0 12px rgba(255, 255, 255, 0.4), 0 0 24px rgba(255, 255, 255, 0.2),
+			inset 0 0 6px rgba(255, 255, 255, 0.3);
+		border-color: rgba(255, 255, 255, 0.7);
+		filter: brightness(1.15);
+	}
+
+	.progress-indicator {
 		position: absolute;
 		top: 0;
 		left: 0;
-		right: 0;
-		bottom: 0;
-		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-		animation: shimmer 2s infinite;
+		height: 100%;
+		background: linear-gradient(90deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.1), transparent);
+		pointer-events: none;
+		z-index: 1;
+		transition: width 0.3s ease;
+		border-radius: 4px;
+		box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.1);
+	}
+
+	.dark .progress-indicator {
+		background: linear-gradient(
+			90deg,
+			rgba(255, 255, 255, 0.2),
+			rgba(255, 255, 255, 0.1),
+			transparent
+		);
+		box-shadow: inset 0 0 4px rgba(255, 255, 255, 0.1);
 	}
 
 	@keyframes shimmer {
@@ -836,6 +1444,36 @@
 		background: linear-gradient(135deg, #218838, #1ea085);
 		transform: translateY(-1px);
 		box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+	}
+
+	.nav-button.category-btn {
+		background: transparent;
+		color: white;
+		font-weight: 600;
+		padding: 0.75rem 1rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 100px;
+		transition: all 0.2s ease;
+		border: 1px solid rgba(255, 255, 255, 0.3);
+	}
+
+	.nav-button.category-btn.has-tag {
+		/* Dynamic color applied via inline style - no additional CSS needed */
+		color: white;
+		border: none;
+	}
+
+	.nav-button.category-btn:hover {
+		transform: translateY(-1px);
+		background: rgba(255, 255, 255, 0.1);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+
+	.nav-button.category-btn.has-tag:hover {
+		filter: brightness(1.15);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 	}
 
 	.nav-button.graph-btn {
@@ -1245,6 +1883,370 @@
 
 		.dark .recap-content::-webkit-scrollbar-thumb:hover {
 			background: #6c757d;
+		}
+	}
+
+	/* Tag Modal Styles */
+	.tag-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.8);
+		z-index: 3000;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1rem;
+		animation: fadeIn 0.3s ease;
+	}
+
+	.tag-modal {
+		background: #ffffff;
+		border-radius: 12px;
+		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+		max-width: 600px;
+		width: 100%;
+		max-height: 80vh;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	.dark .tag-modal {
+		background: #1a1d21;
+		border: 1px solid #2d3238;
+	}
+
+	.tag-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 1.5rem 2rem;
+		border-bottom: 1px solid #e1e5e9;
+		background: #f8f9fa;
+	}
+
+	.dark .tag-header {
+		background: #2d3238;
+		border-bottom-color: #3f4447;
+	}
+
+	.tag-header h3 {
+		margin: 0;
+		color: #1a1a1a;
+		font-size: 1.3rem;
+		font-weight: 600;
+	}
+
+	.dark .tag-header h3 {
+		color: #ffffff;
+	}
+
+	.tag-close {
+		background: none;
+		border: none;
+		color: #6c757d;
+		cursor: pointer;
+		padding: 0.5rem;
+		border-radius: 4px;
+		transition: all 0.2s ease;
+		font-size: 1.2rem;
+	}
+
+	.tag-close:hover {
+		background: rgba(108, 117, 125, 0.1);
+		color: #495057;
+	}
+
+	.dark .tag-close {
+		color: #8899a6;
+	}
+
+	.dark .tag-close:hover {
+		background: rgba(136, 153, 166, 0.1);
+		color: #e7e9ea;
+	}
+
+	.tag-content {
+		flex: 1;
+		padding: 1.5rem 2rem;
+		overflow-y: auto;
+	}
+
+	.dark .tag-content {
+		background: #1a1d21;
+	}
+
+	.tag-loading {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 2rem;
+		gap: 1rem;
+		color: #6c757d;
+	}
+
+	.dark .tag-loading {
+		color: #8899a6;
+	}
+
+	.tag-empty {
+		text-align: center;
+		padding: 2rem;
+		color: #6c757d;
+	}
+
+	.dark .tag-empty {
+		color: #8899a6;
+	}
+
+	.tag-error {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 2rem;
+		text-align: center;
+		gap: 1rem;
+	}
+
+	.tag-error-icon {
+		font-size: 2rem;
+	}
+
+	.tag-error-message {
+		color: #dc3545;
+		font-size: 0.95rem;
+		line-height: 1.5;
+	}
+
+	.dark .tag-error-message {
+		color: #ff6b6b;
+	}
+
+	.tag-retry-button {
+		margin-top: 0.5rem;
+		padding: 0.5rem 1rem;
+		background: #007bff;
+		color: white;
+		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		font-weight: 500;
+		transition: all 0.2s ease;
+	}
+
+	.tag-retry-button:hover {
+		background: #0056b3;
+		transform: translateY(-1px);
+	}
+
+	.tag-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.tag-option {
+		background: #f8f9fa;
+		border: 2px solid #e1e5e9;
+		border-radius: 8px;
+		padding: 1rem;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		text-align: left;
+		width: 100%;
+	}
+
+	.dark .tag-option {
+		background: #2d3238;
+		border-color: #3f4447;
+	}
+
+	.tag-option:hover {
+		background: #e9ecef;
+		border-color: #007bff;
+		transform: translateY(-1px);
+		box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+	}
+
+	.dark .tag-option:hover {
+		background: #3f4447;
+		border-color: #007bff;
+	}
+
+	.tag-option.selected {
+		background: #007bff;
+		border-color: #007bff;
+		color: white;
+	}
+
+	.dark .tag-option.selected {
+		background: #007bff;
+		border-color: #007bff;
+	}
+
+	.tag-name {
+		font-weight: 600;
+		font-size: 1rem;
+		margin-bottom: 0.25rem;
+		color: #1a1a1a;
+	}
+
+	.dark .tag-name {
+		color: #ffffff;
+	}
+
+	.tag-option.selected .tag-name {
+		color: white;
+	}
+
+	.tag-description {
+		font-size: 0.85rem;
+		color: #6c757d;
+		line-height: 1.4;
+	}
+
+	.dark .tag-description {
+		color: #8899a6;
+	}
+
+	.tag-option.selected .tag-description {
+		color: rgba(255, 255, 255, 0.9);
+	}
+
+	.tag-footer {
+		display: flex;
+		justify-content: flex-end;
+		gap: 1rem;
+		padding: 1.5rem 2rem;
+		border-top: 1px solid #e1e5e9;
+		background: #f8f9fa;
+	}
+
+	.dark .tag-footer {
+		background: #2d3238;
+		border-top-color: #3f4447;
+	}
+
+	.tag-button {
+		padding: 0.75rem 1.5rem;
+		border: none;
+		border-radius: 6px;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.tag-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.tag-button-cancel {
+		background: #6c757d;
+		color: white;
+	}
+
+	.tag-button-cancel:hover:not(:disabled) {
+		background: #5a6268;
+	}
+
+	.tag-button-save {
+		background: #28a745;
+		color: white;
+	}
+
+	.tag-button-save:hover:not(:disabled) {
+		background: #218838;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+	}
+
+	.spinner-small {
+		width: 16px;
+		height: 16px;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top-color: white;
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	/* Scrollbar styles for tag content */
+	.tag-content::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	.tag-content::-webkit-scrollbar-track {
+		background: #f1f1f1;
+		border-radius: 4px;
+	}
+
+	.dark .tag-content::-webkit-scrollbar-track {
+		background: #2d3238;
+	}
+
+	.tag-content::-webkit-scrollbar-thumb {
+		background: #c1c1c1;
+		border-radius: 4px;
+	}
+
+	.dark .tag-content::-webkit-scrollbar-thumb {
+		background: #5a6268;
+	}
+
+	.tag-content::-webkit-scrollbar-thumb:hover {
+		background: #a8a8a8;
+	}
+
+	.dark .tag-content::-webkit-scrollbar-thumb:hover {
+		background: #6c757d;
+	}
+
+	@media (max-width: 768px) {
+		.tag-modal {
+			max-width: 95%;
+			max-height: 90vh;
+		}
+
+		.tag-header {
+			padding: 1rem 1.5rem;
+		}
+
+		.tag-header h3 {
+			font-size: 1.1rem;
+		}
+
+		.tag-content {
+			padding: 1rem 1.5rem;
+		}
+
+		.tag-footer {
+			padding: 1rem 1.5rem;
+			flex-direction: column;
+		}
+
+		.tag-button {
+			width: 100%;
+			justify-content: center;
+		}
+
+		.nav-button.category-btn {
+			min-width: 80px;
+			padding: 0.5rem 0.75rem;
+			font-size: 0.85rem;
 		}
 	}
 </style>
