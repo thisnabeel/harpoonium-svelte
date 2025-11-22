@@ -851,6 +851,13 @@
 						class="progress-indicator"
 						style="width: {((currentCardIndex + 1) / cardSet.cards.length) * 100}%"
 					/>
+					<!-- Bright dot indicator for current card -->
+					{#if cardSet?.cards && cardSet.cards.length > 0}
+						<div
+							class="current-indicator-dot"
+							style="left: {((currentCardIndex + 0.5) / cardSet.cards.length) * 100}%"
+						/>
+					{/if}
 				</div>
 			</div>
 
@@ -1231,7 +1238,7 @@
 
 	/* Progress bar styles */
 	.progress-container {
-		padding: 0 2rem;
+		padding: 0 2rem 8px 2rem;
 		background: #ffffff;
 		border-bottom: 1px solid #e1e5e9;
 	}
@@ -1318,19 +1325,35 @@
 
 	.progress-segment.current {
 		opacity: 1;
-		box-shadow: 0 0 10px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 255, 255, 0.3),
-			inset 0 0 4px rgba(255, 255, 255, 0.4);
-		z-index: 5;
-		border: 2px solid rgba(255, 255, 255, 0.6);
-		transform: scaleY(1.2);
-		filter: brightness(1.1);
+		/* Removed glowing border - using dot indicator instead */
 	}
 
 	.dark .progress-segment.current {
-		box-shadow: 0 0 12px rgba(255, 255, 255, 0.4), 0 0 24px rgba(255, 255, 255, 0.2),
-			inset 0 0 6px rgba(255, 255, 255, 0.3);
-		border-color: rgba(255, 255, 255, 0.7);
-		filter: brightness(1.15);
+		opacity: 1;
+		/* Removed glowing border - using dot indicator instead */
+	}
+
+	/* Bright dot indicator for current card position */
+	.current-indicator-dot {
+		position: absolute;
+		bottom: -20px;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 8px;
+		height: 8px;
+		background: #ffffff;
+		border-radius: 50%;
+		box-shadow: 0 0 8px rgba(255, 255, 255, 0.9), 0 0 16px rgba(255, 255, 255, 0.6),
+			0 2px 4px rgba(0, 0, 0, 0.3);
+		z-index: 10;
+		transition: all 0.3s ease;
+		pointer-events: none;
+	}
+
+	.dark .current-indicator-dot {
+		background: #ffffff;
+		box-shadow: 0 0 10px rgba(255, 255, 255, 1), 0 0 20px rgba(255, 255, 255, 0.8),
+			0 2px 6px rgba(0, 0, 0, 0.5);
 	}
 
 	.progress-indicator {
@@ -1565,7 +1588,7 @@
 		}
 
 		.progress-container {
-			padding: 0 1rem;
+			padding: 0 1rem 8px 1rem;
 		}
 
 		.fullscreen-card {
