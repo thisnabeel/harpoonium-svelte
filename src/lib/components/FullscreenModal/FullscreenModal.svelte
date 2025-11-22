@@ -151,32 +151,20 @@
 		}
 	};
 
-	// Navigate to next card (with throttling to prevent rapid clicks)
+	// Navigate to next card (minimal throttling only for button clicks)
 	const nextCard = () => {
-		const now = Date.now();
-		// Throttle navigation to max once per 100ms to prevent glitches
-		if (now - lastNavigationTime < 100) {
-			return;
-		}
-		lastNavigationTime = now;
-
 		if (cardSet?.cards && currentCardIndex < cardSet.cards.length - 1) {
 			currentCardIndex++;
+			lastNavigationTime = Date.now();
 			saveUserCursor(); // Don't await - let it debounce in background
 		}
 	};
 
-	// Navigate to previous card (with throttling to prevent rapid clicks)
+	// Navigate to previous card (minimal throttling only for button clicks)
 	const prevCard = () => {
-		const now = Date.now();
-		// Throttle navigation to max once per 100ms to prevent glitches
-		if (now - lastNavigationTime < 100) {
-			return;
-		}
-		lastNavigationTime = now;
-
 		if (currentCardIndex > 0) {
 			currentCardIndex--;
+			lastNavigationTime = Date.now();
 			saveUserCursor(); // Don't await - let it debounce in background
 		}
 	};
@@ -187,12 +175,9 @@
 			return;
 		}
 
-		const now = Date.now();
-		// Throttle navigation to max once per 100ms to prevent glitches
-		if (now - lastNavigationTime < 100) {
-			return;
-		}
-		lastNavigationTime = now;
+		// Don't throttle direct navigation - user explicitly chose this card
+		// Only update lastNavigationTime to prevent rapid sequential navigation after direct jump
+		lastNavigationTime = Date.now();
 
 		currentCardIndex = targetIndex;
 		saveUserCursor(); // Don't await - let it debounce in background
@@ -232,16 +217,24 @@
 		}
 	};
 
-	// Handle keyboard navigation
+	// Handle keyboard navigation (no throttling for keyboard - instant response)
 	const handleKeydown = (event) => {
 		if (!isOpen) return;
 
 		if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'ArrowDown') {
 			event.preventDefault();
-			nextCard(); // Don't await - allow fast navigation
+			// Direct update for instant response
+			if (cardSet?.cards && currentCardIndex < cardSet.cards.length - 1) {
+				currentCardIndex++;
+				saveUserCursor();
+			}
 		} else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
 			event.preventDefault();
-			prevCard(); // Don't await - allow fast navigation
+			// Direct update for instant response
+			if (currentCardIndex > 0) {
+				currentCardIndex--;
+				saveUserCursor();
+			}
 		} else if (event.key === 'Escape') {
 			event.preventDefault();
 			onClose();
@@ -479,8 +472,11 @@
 			// Fetch the card with tags
 			const cardResponse = await Api.get(`/cards/${currentCard.id}`);
 			currentCardTags = cardResponse.tags || [];
-			// Update the card in cardSet with tags
-			cardSet.cards[currentCardIndex] = cardResponse;
+			// Update the card in cardSet with tags, but preserve the original body and other fields
+			// Merge tag data without overwriting the body field - only update tags
+			if (cardSet.cards[currentCardIndex]?.id === currentCard.id) {
+				cardSet.cards[currentCardIndex].tags = cardResponse.tags || [];
+			}
 			// Update the tag in allCardTags for progress bar
 			const passageTypeTag = currentCardTags.find((tag) => tag.tag_type === 'passage_type');
 			if (passageTypeTag) {
@@ -505,10 +501,10 @@
 			clearTimeout(loadTagsTimer);
 		}
 
-		// Set new timer - load tags after 300ms of no navigation
+		// Set new timer - load tags after 500ms of no navigation (longer delay to not interfere with navigation)
 		loadTagsTimer = setTimeout(() => {
 			loadCurrentCardTags();
-		}, 300);
+		}, 500);
 	};
 
 	// Load all card tags for the entire card set (for progress bar coloring)
@@ -1375,18 +1371,20 @@
 		padding: 2rem;
 		text-align: left;
 		touch-action: none; /* Prevent browser scrolling during touch */
+		/* Performance optimizations for smooth navigation */
+		transform: translateZ(0); /* Force GPU acceleration */
+		will-change: contents;
 	}
 
 	.card-content {
 		max-width: 800px;
 		font-size: 1.5rem;
 		line-height: 1.6;
-
-		white-space: pre-wrap;
+		white-space: normal;
 		word-wrap: break-word;
 		font-weight: 400;
-
-		white-space: normal;
+		/* Performance optimizations for smooth navigation */
+		transform: translateZ(0); /* Force GPU acceleration */
 	}
 
 	.fullscreen-card :global(*) {
