@@ -1276,10 +1276,12 @@
 	}
 
 	.dark .progress-segment {
-		border-right-color: rgba(255, 255, 255, 0.15);
-		border-left-color: rgba(0, 0, 0, 0.3);
+		/* border-right-color: rgba(255, 255, 255, 0.15); */
+		/* border-left-color: rgba(0, 0, 0, 0.3); */
 		opacity: 0.9;
-		box-shadow: 0 0 3px rgba(0, 0, 0, 0.5), inset 0 0 2px rgba(255, 255, 255, 0.1);
+		/* box-shadow: 0 0 3px rgba(0, 0, 0, 0.5), inset 0 0 2px rgba(255, 255, 255, 0.1); */
+		border: 0;
+		background-color: transparent;
 	}
 
 	.progress-segment.untagged {
@@ -1288,7 +1290,7 @@
 	}
 
 	.dark .progress-segment.untagged {
-		background-color: rgb(189 195 199 / 40%) !important;
+		background-color: rgba(0, 0, 0, 0.4) !important;
 		opacity: 0.4;
 	}
 
