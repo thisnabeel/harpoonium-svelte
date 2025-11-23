@@ -20,6 +20,7 @@
 	import BookCard from '$lib/components/Classics/BookCard.svelte';
 	import { showFilter, showExplore } from '$lib/stores/header';
 	import Header from '$lib/components/Header/Header.svelte';
+	import QuickNavRow from '$lib/components/QuickNav/QuickNavRow.svelte';
 
 	const fetchPopularWonders = async () => {
 		const response = await Api.get('/museum.json');
@@ -88,6 +89,8 @@
 	<title>Home</title>
 	<meta name="description" content="harpoonium" />
 </svelte:head>
+
+<QuickNavRow />
 
 <div class="quizzes">
 	{#if $isLoadingTweets}
