@@ -37,6 +37,9 @@
 	let isRecapLoading = false;
 	let recapData = null;
 	let showRecapModal = false;
+	let isLoadingChapters = false;
+	let allChapters = []; // Store all chapters with card sets
+	let bookTitle = null; // Store book title
 
 	// Tag management
 	let showTagModal = false;
@@ -191,14 +194,93 @@
 		}
 	};
 
+	// Fetch chapters and their card sets
+	const fetchChapters = async () => {
+		if (!currentChapter?.id) return;
+
+		isLoadingChapters = true;
+		try {
+			// Fetch nested chapters like the mapper does
+			const response = await Api.get(`/chapters/${currentChapter.id}/nested_chapters`);
+			if (response.error) {
+				throw new Error(response.error);
+			}
+
+			// Get card sets for each chapter in table_of_contents
+			const chaptersWithCardSets = await Promise.all(
+				response.table_of_contents.map(async (chapter) => {
+					try {
+						const cardSetsResponse = await Api.get(`/chapters/${chapter.id}/card_sets`);
+						const cardSets = Array.isArray(cardSetsResponse) ? cardSetsResponse : [];
+						// Use the first card set if available
+						const cardSet = cardSets.length > 0 ? cardSets[0] : null;
+						return {
+							chapter,
+							card_set: cardSet
+						};
+					} catch (error) {
+						console.error(`Failed to load card sets for chapter ${chapter.id}:`, error);
+						return {
+							chapter,
+							card_set: null
+						};
+					}
+				})
+			);
+
+			// Filter to only include chapters with card sets that have cards
+			allChapters = chaptersWithCardSets.filter(
+				(item) => item.card_set && item.card_set.cards && item.card_set.cards.length > 0
+			);
+
+			// Store book title
+			if (response.book && response.book.title) {
+				bookTitle = response.book.title;
+			}
+
+			// Update bookData if it doesn't exist
+			if (!bookData) {
+				bookData = {
+					current: {
+						chapter: response.current_chapter,
+						card_set: cardSet
+					},
+					siblings: allChapters,
+					book: response.book
+				};
+			} else {
+				// Update siblings and book
+				bookData.siblings = allChapters;
+				if (response.book) {
+					bookData.book = response.book;
+					bookTitle = response.book.title;
+				}
+			}
+		} catch (error) {
+			console.error('Failed to fetch chapters:', error);
+		} finally {
+			isLoadingChapters = false;
+		}
+	};
+
 	// Toggle chapter dropdown
-	const toggleChapterDropdown = () => {
-		showChapterDropdown = !showChapterDropdown;
+	const toggleChapterDropdown = async () => {
+		// If we don't have bookData with siblings, try to fetch them
+		if (!bookData || !bookData.siblings || bookData.siblings.length === 0) {
+			if (currentChapter?.id && !isLoadingChapters) {
+				await fetchChapters();
+			}
+		}
+
+		// Toggle dropdown if we have chapters available
+		if (hasAvailableChapters || allChapters.length > 0) {
+			showChapterDropdown = !showChapterDropdown;
+		}
 	};
 
 	// Switch to a different chapter
 	const switchToChapter = async (chapterData) => {
-		if (!bookData || !chapterData) return;
+		if (!chapterData || !chapterData.card_set) return;
 
 		try {
 			// Save current position before switching
@@ -209,6 +291,26 @@
 			cardSet = chapterData.card_set;
 			currentCardIndex = 0;
 			showChapterDropdown = false;
+
+			// Update bookData current
+			if (bookData) {
+				bookData.current = {
+					chapter: chapterData.chapter,
+					card_set: chapterData.card_set
+				};
+			}
+
+			// Reset tag loading for new chapter
+			allCardTags = {};
+			loadedCardSetId = null;
+
+			// Load tags for new card set
+			if (cardSet?.cards && cardSet.cards.length > 0) {
+				loadAllCardTags();
+			}
+
+			// Load user cursor for new chapter
+			await loadUserCursor();
 
 			// Save new position
 			await saveUserCursorImmediate();
@@ -737,6 +839,27 @@
 		return null;
 	})();
 
+	// Check if there are available chapters to navigate to
+	$: hasAvailableChapters = (bookData && bookData.siblings && bookData.siblings.filter(
+		(sibling) => sibling.card_set && sibling.card_set.cards && sibling.card_set.cards.length > 0
+	).length > 0) || allChapters.length > 0;
+
+	// Get book title from various sources
+	$: displayBookTitle = (() => {
+		if (bookTitle) return bookTitle;
+		if (bookData && bookData.book && bookData.book.title) return bookData.book.title;
+		// Try to extract from title prop (format: "Book Title - Chapter Title")
+		if (title && title.includes(' - ')) {
+			return title.split(' - ')[0];
+		}
+		return null;
+	})();
+
+	// Initialize book title when bookData changes
+	$: if (bookData && bookData.book && bookData.book.title && !bookTitle) {
+		bookTitle = bookData.book.title;
+	}
+
 	// Reload card tags when card changes (with debouncing)
 	let lastCardId = null;
 	$: if (cardSet?.cards && cardSet.cards[currentCardIndex] && isOpen) {
@@ -783,38 +906,52 @@
 			<!-- Header -->
 			<div class="fullscreen-header">
 				<div class="fullscreen-title-container">
-					{#if bookData && bookData.siblings && bookData.siblings.length > 0}
-						<div class="chapter-dropdown">
-							<button class="chapter-dropdown-toggle" on:click={toggleChapterDropdown}>
-								<span class="chapter-title">
-									{currentChapter?.title || cardSet.title}
+					<div class="chapter-dropdown">
+						<button class="chapter-dropdown-toggle" on:click={toggleChapterDropdown}>
+							{#if displayBookTitle}
+								<span class="book-title-pill">
+									{displayBookTitle}
 								</span>
+							{/if}
+							<span class="chapter-title">
+								{currentChapter?.title || title || cardSet.title}
+							</span>
+							{#if hasAvailableChapters || isLoadingChapters}
 								<i class="fas fa-chevron-down" class:rotated={showChapterDropdown} />
-							</button>
+							{/if}
+						</button>
 
-							{#if showChapterDropdown}
-								<div
-									class="chapter-dropdown-menu"
-									on:touchstart={handleDropdownTouch}
-									on:touchmove={handleDropdownTouch}
-								>
-									{#each bookData.siblings.filter((sibling) => sibling.card_set && sibling.card_set.cards && sibling.card_set.cards.length > 0) as sibling}
+						{#if showChapterDropdown}
+							<div
+								class="chapter-dropdown-menu"
+								on:touchstart={handleDropdownTouch}
+								on:touchmove={handleDropdownTouch}
+							>
+								{#if isLoadingChapters}
+									<div class="chapter-loading">
+										<div class="spinner-small" />
+										<span>Loading chapters...</span>
+									</div>
+								{:else}
+									{@const chaptersToShow = (bookData && bookData.siblings && bookData.siblings.length > 0) 
+										? bookData.siblings.filter((sibling) => sibling.card_set && sibling.card_set.cards && sibling.card_set.cards.length > 0)
+										: allChapters}
+									{#each chaptersToShow as chapterItem}
 										<button
 											class="chapter-option"
-											class:active={currentChapter?.id === sibling.chapter?.id}
-											on:click={() => switchToChapter(sibling)}
+											class:active={currentChapter?.id === chapterItem.chapter?.id}
+											on:click={() => switchToChapter(chapterItem)}
 										>
-											{sibling.chapter?.title || 'Untitled Chapter'}
+											{chapterItem.chapter?.title || 'Untitled Chapter'}
 										</button>
 									{/each}
-								</div>
-							{/if}
-						</div>
-					{:else}
-						<div class="fullscreen-title">
-							{title || cardSet.title}
-						</div>
-					{/if}
+									{#if chaptersToShow.length === 0}
+										<div class="chapter-empty">No chapters available</div>
+									{/if}
+								{/if}
+							</div>
+						{/if}
+					</div>
 				</div>
 				<button class="fullscreen-close" on:click={handleClose}>
 					<i class="fas fa-times" />
@@ -1088,16 +1225,17 @@
 	.chapter-dropdown-toggle {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.75rem;
 		background: none;
 		border: none;
 		color: #1a1a1a;
 		font-size: 1.2rem;
 		font-weight: 600;
 		cursor: pointer;
-		padding: 0.5rem;
-		border-radius: 4px;
+		padding: 0.5rem 0.75rem;
+		border-radius: 6px;
 		transition: all 0.2s ease;
+		position: relative;
 	}
 
 	.dark .chapter-dropdown-toggle {
@@ -1112,11 +1250,34 @@
 		background: rgba(255, 255, 255, 0.1);
 	}
 
+	.book-title-pill {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.25rem 0.75rem;
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		color: white;
+		border-radius: 20px;
+		font-size: 0.75rem;
+		font-weight: 600;
+		white-space: nowrap;
+		margin-right: 0.75rem;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+		letter-spacing: 0.3px;
+		text-transform: uppercase;
+	}
+
+	.dark .book-title-pill {
+		background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+		box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
+	}
+
 	.chapter-title {
-		max-width: 300px;
+		flex: 1;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		max-width: 400px;
 	}
 
 	.chapter-dropdown-toggle i {
@@ -1131,13 +1292,16 @@
 		position: absolute;
 		top: 100%;
 		left: 0;
-		right: 0;
+		min-width: 100%;
+		width: max-content;
+		min-width: 300px;
+		max-width: 500px;
 		background: #ffffff;
 		border: 1px solid #e1e5e9;
-		border-radius: 6px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		border-radius: 8px;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1);
 		z-index: 1000;
-		max-height: 300px;
+		max-height: 400px;
 		overflow-y: auto;
 		overflow-x: hidden;
 		margin-top: 0.5rem;
@@ -1167,21 +1331,26 @@
 	.dark .chapter-dropdown-menu {
 		background: #1a1d21;
 		border-color: #2d3238;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
 	}
 
 	.chapter-option {
 		display: block;
 		width: 100%;
-		padding: 0.75rem 1rem;
+		padding: 0.875rem 1.25rem;
 		background: none;
 		border: none;
 		text-align: left;
 		color: #1a1a1a;
-		font-size: 1rem;
+		font-size: 0.95rem;
+		line-height: 1.5;
 		cursor: pointer;
-		transition: background-color 0.2s ease;
+		transition: all 0.2s ease;
 		border-bottom: 1px solid #f0f0f0;
+		word-wrap: break-word;
+		white-space: normal;
+		overflow-wrap: break-word;
+		hyphens: auto;
 	}
 
 	.dark .chapter-option {
@@ -1195,6 +1364,7 @@
 
 	.chapter-option:hover {
 		background: #f8f9fa;
+		padding-left: 1.5rem;
 	}
 
 	.dark .chapter-option:hover {
@@ -1202,13 +1372,40 @@
 	}
 
 	.chapter-option.active {
-		background: #007bff;
+		background: linear-gradient(135deg, #007bff, #0056b3);
 		color: white;
-		font-weight: 600;
+		font-weight: 500;
+		box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.3);
 	}
 
 	.dark .chapter-option.active {
-		background: #007bff;
+		background: linear-gradient(135deg, #007bff, #0056b3);
+		box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.3);
+	}
+
+	.chapter-loading {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 1rem;
+		color: #6c757d;
+		font-size: 0.9rem;
+	}
+
+	.dark .chapter-loading {
+		color: #8899a6;
+	}
+
+	.chapter-empty {
+		padding: 1rem;
+		text-align: center;
+		color: #6c757d;
+		font-size: 0.9rem;
+	}
+
+	.dark .chapter-empty {
+		color: #8899a6;
 	}
 
 	.fullscreen-close {
@@ -1577,9 +1774,26 @@
 		.chapter-dropdown-menu {
 			left: -1rem;
 			right: -1rem;
-			max-height: 250px;
+			min-width: calc(100% + 2rem);
+			max-width: calc(100vw - 2rem);
+			max-height: 60vh;
 			-webkit-overflow-scrolling: touch;
 			overscroll-behavior: contain; /* Prevent scroll chaining */
+		}
+
+		.book-title-pill {
+			font-size: 0.65rem;
+			padding: 0.2rem 0.6rem;
+			margin-right: 0.5rem;
+		}
+
+		.chapter-title {
+			max-width: 200px;
+		}
+
+		.chapter-option {
+			padding: 0.75rem 1rem;
+			font-size: 0.9rem;
 		}
 
 		.chapter-option {
