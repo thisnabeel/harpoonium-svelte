@@ -360,9 +360,11 @@
 	import { browser } from '$app/environment';
 
 	// Toggle fullscreen view
-	const toggleFullscreen = () => {
+		const toggleFullscreen = () => {
 		if (browser) {
-			openFullscreenModal(cardSet, cardSet.title, null, chapter);
+			// Try to get book_id from chapter (if it's root) or pass null to use fallback
+			const bookId = chapter?.chapter_id ? null : chapter?.id;
+			openFullscreenModal(cardSet, cardSet.title, null, chapter, null, bookId);
 		}
 	};
 

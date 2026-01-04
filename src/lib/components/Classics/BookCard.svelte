@@ -36,7 +36,9 @@
 					response.current.card_set,
 					`${book.title} - ${response.current.chapter.title}`,
 					response, // Pass the full book data
-					response.current.chapter // Pass the current chapter
+					response.current.chapter, // Pass the current chapter
+					null, // initialCardIndex
+					book.id // bookId (root chapter ID)
 				);
 			} else {
 				console.log('No cards available in response');

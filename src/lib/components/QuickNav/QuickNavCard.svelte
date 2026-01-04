@@ -126,11 +126,18 @@
 				response.current.card_set.cards &&
 				response.current.card_set.cards.length > 0
 			) {
+				// Get the card_index from cursor data, default to 0 if not available
+				const initialCardIndex = cursorData.cursor?.card_index ?? cursorData.cursor?.cardIndex ?? null;
+				// Get the book_id (root chapter ID) from cursorData
+				const bookId = cursorData.book?.id ?? null;
+				
 				openFullscreenModal(
 					response.current.card_set,
 					`${cursorData.book.title} - ${cursorData.chapter.title}`,
 					response,
-					response.current.chapter
+					response.current.chapter,
+					initialCardIndex,
+					bookId
 				);
 			}
 		} catch (error) {

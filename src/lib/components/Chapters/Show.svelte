@@ -27,6 +27,7 @@
 	let editedDescription = '';
 	let cardSets = [];
 	let isLoadingCardSets = false;
+	let isGenerating = false;
 
 	const fetchChapter = async (slug) => {
 		chapter = await Api.get('/chapters/' + slug + '.json');
@@ -49,10 +50,34 @@
 		}
 	};
 
+	// Generate card set from chapter body using sentence splitting
+	const generateCardSet = async () => {
+		if (!chapter?.id) return;
+
+		isGenerating = true;
+		try {
+			const response = await Api.post(`/chapters/${chapter.id}/generate_cards_set_from_sentences`);
+			
+			// Add the new card set to the list
+			cardSets = [...cardSets, response];
+			
+			// Show success message
+			alert('Card set generated successfully!');
+		} catch (err) {
+			console.error('Error generating card set:', err);
+			const errorMessage = err.response?.data?.error || err.message || 'Failed to generate card set';
+			alert(errorMessage);
+		} finally {
+			isGenerating = false;
+		}
+	};
+
 	// Open first card set in fullscreen
 	const openFirstCardSet = () => {
 		if (cardSets.length > 0 && cardSets[0]) {
-			openFullscreenModal(cardSets[0], cardSets[0].title);
+			// Try to get book_id from chapter (if it's root) or pass null to use fallback
+			const bookId = chapter?.chapter_id ? null : chapter?.id;
+			openFullscreenModal(cardSets[0], cardSets[0].title, null, chapter, null, bookId);
 		}
 	};
 
@@ -247,15 +272,31 @@
 		{/if}
 	</div>
 
-	<!-- Read button for first card set -->
-	{#if cardSets.length > 0}
-		<div class="read-section">
+	<!-- Action buttons -->
+	<div class="action-buttons">
+		{#if $user?.admin}
+			<button
+				class="generate-button"
+				on:click={generateCardSet}
+				disabled={isGenerating}
+				title="Generate card set from chapter body"
+			>
+				{#if isGenerating}
+					<div class="spinner-small" />
+					Generating...
+				{:else}
+					<i class="fas fa-bolt" />
+					Generate Set
+				{/if}
+			</button>
+		{/if}
+		{#if cardSets.length > 0}
 			<button class="read-button" on:click={openFirstCardSet}>
 				<i class="fas fa-book-open" />
 				Read
 			</button>
-		</div>
-	{/if}
+		{/if}
+	</div>
 
 	{#if tabs.length > 1}
 		<div class="flex">
@@ -626,6 +667,69 @@
 	}
 
 	/* Read button styles */
+	.action-buttons {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 1rem;
+		margin: 1rem 0;
+		flex-wrap: wrap;
+	}
+
+	.generate-button {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1.5rem;
+		background: #ff9800;
+		color: white;
+		border: none;
+		border-radius: 8px;
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	}
+
+	.generate-button:hover:not(:disabled) {
+		background: #f57c00;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+	}
+
+	.generate-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.generate-button i {
+		font-size: 1.1rem;
+	}
+
+	.dark .generate-button {
+		background: #ff6f00;
+	}
+
+	.dark .generate-button:hover:not(:disabled) {
+		background: #e65100;
+	}
+
+	.spinner-small {
+		width: 14px;
+		height: 14px;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-top-color: white;
+		border-radius: 50%;
+		animation: spin 0.6s linear infinite;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
 	.read-section {
 		display: flex;
 		justify-content: center;
@@ -684,9 +788,17 @@
 			width: 100%;
 		}
 
+		.action-buttons {
+			flex-direction: column;
+			gap: 0.75rem;
+		}
+
+		.generate-button,
 		.read-button {
 			padding: 0.6rem 1.2rem;
 			font-size: 0.9rem;
+			width: 100%;
+			justify-content: center;
 		}
 	}
 </style>

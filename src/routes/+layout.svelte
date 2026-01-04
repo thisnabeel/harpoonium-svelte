@@ -66,11 +66,14 @@
 
 			// Update the modal with the next chapter data
 			import('$lib/stores/fullscreenModal').then(({ openFullscreenModal }) => {
+				// Keep the same bookId from the current modal
 				openFullscreenModal(
 					nextCardSet,
 					`${modalData.title.split(' - ')[0]} - ${nextChapter.title}`,
 					modalData.bookData, // Keep the same book data
-					nextChapter
+					nextChapter,
+					null, // initialCardIndex
+					modalData.bookId // Keep the same bookId
 				);
 			});
 		} catch (error) {
@@ -137,6 +140,8 @@
 		title={$fullscreenModal.title}
 		bookData={$fullscreenModal.bookData}
 		currentChapter={$fullscreenModal.currentChapter}
+		initialCardIndex={$fullscreenModal.initialCardIndex}
+		bookId={$fullscreenModal.bookId}
 		onClose={closeFullscreenModal}
 		onNextChapter={handleNextChapter}
 	/>

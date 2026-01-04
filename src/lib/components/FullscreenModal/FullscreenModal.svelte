@@ -11,6 +11,8 @@
 	export let onNextChapter = null; // New prop for next chapter functionality
 	export let bookData = null; // New prop for book data with current and siblings
 	export let currentChapter = null; // New prop for current chapter
+	export let initialCardIndex = null; // Optional initial card index to start at
+	export let bookId = null; // Root book/chapter ID for loading cursor
 
 	// Debug logging
 	$: console.log('FullscreenModal props changed:', { isOpen, cardSet, title });
@@ -54,6 +56,14 @@
 	let isLoadingAllTags = false;
 	let loadedCardSetId = null; // Track which cardSet we've loaded tags for
 
+	// Note management
+	let showNoteModal = false;
+	let currentNote = null;
+	let noteBody = '';
+	let isLoadingNote = false;
+	let isSavingNote = false;
+	let noteLoadError = null;
+
 	// Color mapping for tag types (enhanced color scheme for better contrast and visual appeal)
 	const tagColors = {
 		'Description / Worldbuilding': '#5dade2', // Vibrant Sky Blue
@@ -67,7 +77,8 @@
 		'Atmospheric / Mood Setting': '#8e44ad', // Deep Purple
 		'Transitional Passage': '#95a5a6', // Neutral Gray
 		'Symbolic / Metaphorical Passage': '#1abc9c', // Bright Teal
-		'Reflection / Moral Lesson': '#27ae60' // Forest Green
+		'Reflection / Moral Lesson': '#27ae60', // Forest Green
+		Heart: '#e91e63' // Pink for heart/favorite
 	};
 
 	// Default color for untagged cards
@@ -156,19 +167,27 @@
 
 	// Navigate to next card (minimal throttling only for button clicks)
 	const nextCard = () => {
+		console.log('nextCard called:', { currentCardIndex, cardSetLength: cardSet?.cards?.length, hasCards: !!cardSet?.cards });
 		if (cardSet?.cards && currentCardIndex < cardSet.cards.length - 1) {
 			currentCardIndex++;
 			lastNavigationTime = Date.now();
 			saveUserCursor(); // Don't await - let it debounce in background
+			console.log('nextCard: moved to index', currentCardIndex);
+		} else {
+			console.log('nextCard: cannot move - at end or no cards');
 		}
 	};
 
 	// Navigate to previous card (minimal throttling only for button clicks)
 	const prevCard = () => {
+		console.log('prevCard called:', { currentCardIndex, hasCards: !!cardSet?.cards });
 		if (currentCardIndex > 0) {
 			currentCardIndex--;
 			lastNavigationTime = Date.now();
 			saveUserCursor(); // Don't await - let it debounce in background
+			console.log('prevCard: moved to index', currentCardIndex);
+		} else {
+			console.log('prevCard: cannot move - at start');
 		}
 	};
 
@@ -323,6 +342,25 @@
 	const handleKeydown = (event) => {
 		if (!isOpen) return;
 
+		// Don't handle navigation if a modal is open or if user is typing in an input/textarea
+		const isTyping = event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA';
+		if (showNoteModal || showTagModal || showRecapModal || isTyping) {
+			// Only handle Escape key to close modals
+			if (event.key === 'Escape') {
+				if (showNoteModal) {
+					event.preventDefault();
+					closeNoteModal();
+				} else if (showTagModal) {
+					event.preventDefault();
+					closeTagModal();
+				} else if (showRecapModal) {
+					event.preventDefault();
+					closeRecapModal();
+				}
+			}
+			return;
+		}
+
 		if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'ArrowDown') {
 			event.preventDefault();
 			// Direct update for instant response
@@ -377,6 +415,11 @@
 	// Handle mouse click navigation
 	const handleCardClick = (event) => {
 		if (!isOpen) return;
+		
+		// Don't handle navigation if a modal is open
+		if (showNoteModal || showTagModal || showRecapModal) {
+			return;
+		}
 
 		const cardElement = event.currentTarget;
 		const rect = cardElement.getBoundingClientRect();
@@ -388,28 +431,54 @@
 			prevCard(); // Don't await - allow fast navigation
 		} else {
 			// Click in lower half - next card
-			nextCard(); // Don't await - allow fast navigation
+			nextCard(); // Don't allow fast navigation
 		}
 	};
 
 	// Load user's saved cursor position when modal opens
 	const loadUserCursor = async () => {
-		if (!currentUser || !currentChapter || !bookData) {
+		if (!currentUser) {
+			return;
+		}
+
+		// Don't load cursor if we've already initialized with initialCardIndex
+		if (hasInitializedCardIndex && initialCardIndex !== null && initialCardIndex !== undefined) {
+			console.log('Skipping loadUserCursor - already initialized with initialCardIndex');
+			return;
+		}
+
+		// Use bookId from props if available, otherwise try to derive it
+		let rootBookId = bookId;
+		
+		if (!rootBookId && currentChapter) {
+			// Fallback: try currentChapter.id (might work if it's the root)
+			rootBookId = currentChapter.id;
+		}
+
+		if (!rootBookId) {
+			console.warn('No bookId available for loading cursor');
 			return;
 		}
 
 		try {
-			const response = await Api.get(
-				`/users/${currentUser.id}/cursor/${bookData?.current?.chapter?.id}`
-			);
+			const response = await Api.get(`/users/${currentUser.id}/cursor/${rootBookId}`);
 			if (response && response.card_id) {
-				// Find the card index for the saved card
+				// Check if the cursor's card is in the current cardSet
 				const savedCardIndex = cardSet?.cards?.findIndex((card) => card.id === response.card_id);
 				if (savedCardIndex !== -1) {
 					currentCardIndex = savedCardIndex;
 					console.log('Loaded user cursor position:', {
+						book_id: rootBookId,
 						card_id: response.card_id,
-						card_index: currentCardIndex
+						card_index: currentCardIndex,
+						chapter_id: response.chapter_id
+					});
+				} else {
+					console.log('Cursor card not in current cardSet:', {
+						cursor_card_id: response.card_id,
+						cursor_chapter_id: response.chapter_id,
+						current_chapter_id: currentChapter?.id,
+						current_card_set_id: cardSet?.id
 					});
 				}
 			}
@@ -421,14 +490,38 @@
 		}
 	};
 
+	// Track if we've initialized the card index for this modal session
+	let hasInitializedCardIndex = false;
+	let lastCardSetId = null;
+
 	// Reset card index when modal opens
 	$: if (isOpen && cardSet?.cards && typeof document !== 'undefined') {
 		document.body.style.overflow = 'hidden';
-		// Load user's saved position
-		loadUserCursor();
+		
+		const currentCardSetId = cardSet.id || cardSet.cards[0]?.card_set_id || cardSet.cards[0]?.id;
+		
+		// Only initialize card index once per cardSet
+		if (currentCardSetId !== lastCardSetId) {
+			lastCardSetId = currentCardSetId;
+			hasInitializedCardIndex = false;
+		}
+		
+		if (!hasInitializedCardIndex) {
+			hasInitializedCardIndex = true;
+			
+			// Use initialCardIndex if provided, otherwise load user's saved position
+			if (initialCardIndex !== null && initialCardIndex !== undefined && initialCardIndex >= 0) {
+				// Validate the index is within bounds
+				const validIndex = Math.min(initialCardIndex, cardSet.cards.length - 1);
+				currentCardIndex = Math.max(0, validIndex);
+				console.log('Using initial card index:', currentCardIndex);
+			} else {
+				// Load user's saved position
+				loadUserCursor();
+			}
+		}
 
 		// Only load tags if we haven't loaded them for this cardSet yet
-		const currentCardSetId = cardSet.id || cardSet.cards[0]?.id;
 		if (currentCardSetId !== loadedCardSetId) {
 			loadedCardSetId = currentCardSetId;
 			// Load all card tags for progress bar coloring (only once per cardSet)
@@ -439,6 +532,10 @@
 		// Clear tag map and loaded cardSet ID when modal closes
 		allCardTags = {};
 		loadedCardSetId = null;
+		lastCardSetId = null;
+		hasInitializedCardIndex = false;
+		// Reset card index when modal closes
+		currentCardIndex = 0;
 	}
 
 	// Add keyboard event listener
@@ -816,6 +913,165 @@
 		}
 	};
 
+	// Toggle heart tag
+	const toggleHeartTag = async () => {
+		if (!cardSet?.cards || !cardSet.cards[currentCardIndex]) {
+			return;
+		}
+
+		const currentCard = cardSet.cards[currentCardIndex];
+		
+		// Find the Heart tag ID
+		let heartTagId = null;
+		try {
+			const tagsResponse = await Api.get('/tags?tag_type=passage_type');
+			const heartTag = tagsResponse.find((tag) => tag.name === 'Heart');
+			if (!heartTag) {
+				console.error('Heart tag not found');
+				return;
+			}
+			heartTagId = heartTag.id;
+		} catch (error) {
+			console.error('Failed to load tags:', error);
+			return;
+		}
+
+		// If card already has Heart tag, remove it; otherwise, set it
+		const newTagId = hasHeartTag ? null : heartTagId;
+
+		try {
+			await Api.post(`/cards/${currentCard.id}/update_tag`, {
+				tag_id: newTagId
+			});
+
+			// Reload the card to get updated tags
+			await loadCurrentCardTags();
+
+			// Update the card in the cardSet
+			const updatedCard = await Api.get(`/cards/${currentCard.id}`);
+			cardSet.cards[currentCardIndex] = updatedCard;
+
+			// Update the tag in allCardTags for progress bar
+			const passageTypeTag = updatedCard.tags?.find((tag) => tag.tag_type === 'passage_type');
+			if (passageTypeTag) {
+				allCardTags[currentCard.id] = passageTypeTag;
+			} else {
+				delete allCardTags[currentCard.id];
+			}
+		} catch (error) {
+			console.error('Failed to toggle heart tag:', error);
+			alert('Failed to update heart tag. Please try again.');
+		}
+	};
+
+	// Load note for current card
+	const loadNote = async () => {
+		if (!cardSet?.cards || !cardSet.cards[currentCardIndex] || !currentUser) {
+			return;
+		}
+
+		const currentCard = cardSet.cards[currentCardIndex];
+		isLoadingNote = true;
+		noteLoadError = null;
+
+		try {
+			const response = await Api.get(
+				`/user_notes?notable_type=Card&notable_id=${currentCard.id}&user_id=${currentUser.id}`
+			);
+			
+			if (response && response.length > 0) {
+				currentNote = response[0];
+				noteBody = currentNote.body || '';
+			} else {
+				currentNote = null;
+				noteBody = '';
+			}
+		} catch (error) {
+			console.error('Failed to load note:', error);
+			noteLoadError = 'Failed to load note. Please try again.';
+			currentNote = null;
+			noteBody = '';
+		} finally {
+			isLoadingNote = false;
+		}
+	};
+
+	// Open note modal
+	const openNoteModal = async () => {
+		showNoteModal = true;
+		noteLoadError = null;
+		await loadNote();
+	};
+
+	// Close note modal
+	const closeNoteModal = () => {
+		showNoteModal = false;
+		currentNote = null;
+		noteBody = '';
+		noteLoadError = null;
+	};
+
+	// Save note
+	const saveNote = async () => {
+		if (!cardSet?.cards || !cardSet.cards[currentCardIndex] || !currentUser) {
+			return;
+		}
+
+		const currentCard = cardSet.cards[currentCardIndex];
+		isSavingNote = true;
+
+		try {
+			const noteData = {
+				body: noteBody,
+				position: currentCardIndex,
+				notable_type: 'Card',
+				notable_id: currentCard.id
+			};
+
+			if (currentNote) {
+				// Update existing note
+				await Api.put(`/user_notes/${currentNote.id}?user_id=${currentUser.id}`, {
+					user_note: noteData
+				});
+			} else {
+				// Create new note
+				await Api.post(`/user_notes?user_id=${currentUser.id}`, {
+					user_note: noteData
+				});
+			}
+
+			// Reload the note
+			await loadNote();
+			closeNoteModal();
+		} catch (error) {
+			console.error('Failed to save note:', error);
+			alert('Failed to save note. Please try again.');
+		} finally {
+			isSavingNote = false;
+		}
+	};
+
+	// Delete note
+	const deleteNote = async () => {
+		if (!currentNote || !currentUser) {
+			return;
+		}
+
+		if (!confirm('Are you sure you want to delete this note?')) {
+			return;
+		}
+
+		try {
+			await Api.delete(`/user_notes/${currentNote.id}?user_id=${currentUser.id}`);
+			currentNote = null;
+			noteBody = '';
+			closeNoteModal();
+		} catch (error) {
+			console.error('Failed to delete note:', error);
+			alert('Failed to delete note. Please try again.');
+		}
+	};
+
 	// Get current card's tag name
 	$: currentTagName = (() => {
 		if (!cardSet?.cards || !cardSet.cards[currentCardIndex]) return null;
@@ -860,6 +1116,15 @@
 		bookTitle = bookData.book.title;
 	}
 
+	// Check if current card has heart tag
+	$: hasHeartTag = (() => {
+		if (!cardSet?.cards || !cardSet.cards[currentCardIndex]) return false;
+		const card = cardSet.cards[currentCardIndex];
+		if (card.tags && card.tags.length > 0) {
+			return card.tags.some((tag) => tag.name === 'Heart');
+		}
+		return false;
+	})();
 	// Reload card tags when card changes (with debouncing)
 	let lastCardId = null;
 	$: if (cardSet?.cards && cardSet.cards[currentCardIndex] && isOpen) {
@@ -876,6 +1141,15 @@
 				currentCardTags = currentCard.tags;
 				const passageTypeTag = currentCardTags.find((tag) => tag.tag_type === 'passage_type');
 				selectedTagId = passageTypeTag ? passageTypeTag.id : null;
+			}
+			
+			// Load note if card has heart tag (only if modal is not open to avoid unnecessary calls)
+			if (hasHeartTag && !showNoteModal && currentUser) {
+				loadNote();
+			} else {
+				// Reset note state when card changes
+				currentNote = null;
+				noteBody = '';
 			}
 		}
 	}
@@ -1039,6 +1313,26 @@
 					{currentTagName || 'category'}
 				</button>
 
+				<button
+					class="nav-button heart-btn"
+					class:active={hasHeartTag}
+					on:click={toggleHeartTag}
+					title={hasHeartTag ? 'Remove heart' : 'Add heart'}
+				>
+					<i class="fas fa-heart" />
+				</button>
+
+				{#if hasHeartTag}
+					<button
+						class="nav-button note-btn"
+						class:active={currentNote}
+						on:click={openNoteModal}
+						title={currentNote ? 'Edit note' : 'Add note'}
+					>
+						<i class="fas fa-sticky-note" />
+					</button>
+				{/if}
+
 				<button class="nav-button graph-btn" on:click={loadRecap}>
 					{#if isRecapLoading}
 						<div class="spinner-small" />
@@ -1149,6 +1443,68 @@
 						<span>Saving...</span>
 					{:else}
 						Save
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Note Modal -->
+{#if showNoteModal}
+	<div class="note-overlay" on:click={closeNoteModal}>
+		<div class="note-modal" on:click|stopPropagation={() => {}}>
+			<div class="note-header">
+				<h3>Note</h3>
+				<button class="note-close" on:click={closeNoteModal}>
+					<i class="fas fa-times" />
+				</button>
+			</div>
+
+			<div class="note-content">
+				{#if isLoadingNote}
+					<div class="note-loading">
+						<div class="spinner-small" />
+						<span>Loading note...</span>
+					</div>
+				{:else if noteLoadError}
+					<div class="note-error">
+						<div class="note-error-icon">⚠️</div>
+						<div class="note-error-message">{noteLoadError}</div>
+						<button class="note-retry-button" on:click={loadNote}> Retry </button>
+					</div>
+				{:else}
+					<textarea
+						class="note-textarea"
+						placeholder="Write your note here..."
+						bind:value={noteBody}
+						rows="8"
+						on:keydown|stopPropagation
+						on:keyup|stopPropagation
+						on:click|stopPropagation
+					/>
+				{/if}
+			</div>
+
+			<div class="note-footer">
+				{#if currentNote}
+					<button class="note-button note-button-delete" on:click={deleteNote}>
+						<i class="fas fa-trash" /> Delete
+					</button>
+				{/if}
+				<button class="note-button note-button-cancel" on:click={closeNoteModal}>
+					Cancel
+				</button>
+				<button
+					class="note-button note-button-save"
+					on:click={saveNote}
+					disabled={isSavingNote || isLoadingNote}
+				>
+					{#if isSavingNote}
+						<div class="spinner-small" />
+						<span>Saving...</span>
+					{:else}
+						{currentNote ? 'Update' : 'Save'}
 					{/if}
 				</button>
 			</div>
@@ -1694,6 +2050,78 @@
 	.nav-button.category-btn.has-tag:hover {
 		filter: brightness(1.15);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+	}
+
+	.nav-button.heart-btn {
+		background: transparent;
+		color: white;
+		font-weight: 600;
+		padding: 0.75rem 1rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 48px;
+		transition: all 0.2s ease;
+		border: 1px solid rgba(255, 255, 255, 0.3);
+	}
+
+	.nav-button.heart-btn i {
+		font-size: 1rem;
+	}
+
+	.nav-button.heart-btn.active {
+		background: #e91e63;
+		background: linear-gradient(135deg, #e91e63, #c2185b);
+		color: white;
+		border: none;
+	}
+
+	.nav-button.heart-btn:hover {
+		transform: translateY(-1px);
+		background: rgba(233, 30, 99, 0.2);
+		box-shadow: 0 4px 12px rgba(233, 30, 99, 0.3);
+	}
+
+	.nav-button.heart-btn.active:hover {
+		background: linear-gradient(135deg, #d81b60, #ad1457);
+		filter: brightness(1.1);
+		box-shadow: 0 4px 16px rgba(233, 30, 99, 0.5);
+	}
+
+	.nav-button.note-btn {
+		background: transparent;
+		color: white;
+		font-weight: 600;
+		padding: 0.75rem 1rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 48px;
+		transition: all 0.2s ease;
+		border: 1px solid rgba(255, 255, 255, 0.3);
+	}
+
+	.nav-button.note-btn.active {
+		background: #ff9800;
+		background: linear-gradient(135deg, #ff9800, #f57c00);
+		color: white;
+		border: none;
+	}
+
+	.nav-button.note-btn:hover {
+		transform: translateY(-1px);
+		background: rgba(255, 152, 0, 0.2);
+		box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+	}
+
+	.nav-button.note-btn.active:hover {
+		background: linear-gradient(135deg, #f57c00, #e65100);
+		filter: brightness(1.1);
+		box-shadow: 0 4px 16px rgba(255, 152, 0, 0.5);
+	}
+
+	.nav-button.note-btn i {
+		font-size: 1rem;
 	}
 
 	.nav-button.graph-btn {
@@ -2476,6 +2904,265 @@
 		}
 
 		.tag-button {
+			width: 100%;
+			justify-content: center;
+		}
+	}
+
+	/* Note Modal Styles */
+	.note-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.6);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 10000;
+		backdrop-filter: blur(4px);
+	}
+
+	.note-modal {
+		background: #ffffff;
+		border-radius: 12px;
+		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+		max-width: 600px;
+		width: 100%;
+		max-height: 80vh;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+		animation: fadeIn 0.2s ease;
+	}
+
+	.dark .note-modal {
+		background: #1a1d21;
+		border: 1px solid #2d3238;
+	}
+
+	.note-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 1.5rem 2rem;
+		border-bottom: 1px solid #e1e5e9;
+		background: #f8f9fa;
+	}
+
+	.dark .note-header {
+		background: #2d3238;
+		border-bottom-color: #3f4447;
+	}
+
+	.note-header h3 {
+		margin: 0;
+		color: #1a1a1a;
+		font-size: 1.3rem;
+		font-weight: 600;
+	}
+
+	.dark .note-header h3 {
+		color: #ffffff;
+	}
+
+	.note-close {
+		background: none;
+		border: none;
+		color: #6c757d;
+		font-size: 1.2rem;
+		cursor: pointer;
+		padding: 0.25rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 4px;
+		transition: all 0.2s ease;
+	}
+
+	.note-close:hover {
+		background: rgba(0, 0, 0, 0.1);
+		color: #1a1a1a;
+	}
+
+	.dark .note-close {
+		color: #9ca3af;
+	}
+
+	.dark .note-close:hover {
+		background: rgba(255, 255, 255, 0.1);
+		color: #ffffff;
+	}
+
+	.note-content {
+		padding: 2rem;
+		flex: 1;
+		overflow-y: auto;
+	}
+
+	.note-textarea {
+		width: 100%;
+		min-height: 200px;
+		padding: 1rem;
+		border: 1px solid #e1e5e9;
+		border-radius: 8px;
+		font-size: 1rem;
+		font-family: inherit;
+		line-height: 1.6;
+		resize: vertical;
+		background: #ffffff;
+		color: #1a1a1a;
+		transition: border-color 0.2s ease;
+	}
+
+	.note-textarea:focus {
+		outline: none;
+		border-color: #007bff;
+		box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+	}
+
+	.dark .note-textarea {
+		background: #2d3238;
+		border-color: #3f4447;
+		color: #ffffff;
+	}
+
+	.dark .note-textarea:focus {
+		border-color: #007bff;
+		box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
+	}
+
+	.note-textarea::placeholder {
+		color: #9ca3af;
+	}
+
+	.dark .note-textarea::placeholder {
+		color: #6c757d;
+	}
+
+	.note-loading,
+	.note-error {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 2rem;
+		gap: 1rem;
+	}
+
+	.note-error-icon {
+		font-size: 2rem;
+	}
+
+	.note-error-message {
+		color: #e74c3c;
+		text-align: center;
+	}
+
+	.dark .note-error-message {
+		color: #ef4444;
+	}
+
+	.note-retry-button {
+		background: #007bff;
+		color: white;
+		border: none;
+		padding: 0.5rem 1rem;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 0.9rem;
+		transition: all 0.2s ease;
+	}
+
+	.note-retry-button:hover {
+		background: #0056b3;
+	}
+
+	.note-footer {
+		display: flex;
+		justify-content: flex-end;
+		gap: 1rem;
+		padding: 1.5rem 2rem;
+		border-top: 1px solid #e1e5e9;
+		background: #f8f9fa;
+	}
+
+	.dark .note-footer {
+		background: #2d3238;
+		border-top-color: #3f4447;
+	}
+
+	.note-button {
+		padding: 0.75rem 1.5rem;
+		border: none;
+		border-radius: 6px;
+		font-size: 1rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.note-button:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.note-button-cancel {
+		background: #6c757d;
+		color: white;
+	}
+
+	.note-button-cancel:hover:not(:disabled) {
+		background: #5a6268;
+	}
+
+	.note-button-save {
+		background: #007bff;
+		color: white;
+	}
+
+	.note-button-save:hover:not(:disabled) {
+		background: #0056b3;
+	}
+
+	.note-button-delete {
+		background: #dc3545;
+		color: white;
+		margin-right: auto;
+	}
+
+	.note-button-delete:hover:not(:disabled) {
+		background: #c82333;
+	}
+
+	@media (max-width: 768px) {
+		.note-modal {
+			max-width: 95%;
+			max-height: 90vh;
+		}
+
+		.note-header {
+			padding: 1rem 1.5rem;
+		}
+
+		.note-header h3 {
+			font-size: 1.1rem;
+		}
+
+		.note-content {
+			padding: 1rem 1.5rem;
+		}
+
+		.note-footer {
+			padding: 1rem 1.5rem;
+			flex-direction: column;
+		}
+
+		.note-button {
 			width: 100%;
 			justify-content: center;
 		}

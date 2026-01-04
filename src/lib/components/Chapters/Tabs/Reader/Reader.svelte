@@ -78,7 +78,9 @@
 					position: card.position
 				}))
 			};
-			openFullscreenModal(cardSet, chapter?.title || 'Reader');
+			// Try to get book_id from chapter (if it's root) or pass null to use fallback
+			const bookId = chapter?.chapter_id ? null : chapter?.id;
+			openFullscreenModal(cardSet, chapter?.title || 'Reader', null, chapter, null, bookId);
 		}
 	};
 
