@@ -173,7 +173,11 @@
 
 	// Navigate to next card (minimal throttling only for button clicks)
 	const nextCard = () => {
-		console.log('nextCard called:', { currentCardIndex, cardSetLength: cardSet?.cards?.length, hasCards: !!cardSet?.cards });
+		console.log('nextCard called:', {
+			currentCardIndex,
+			cardSetLength: cardSet?.cards?.length,
+			hasCards: !!cardSet?.cards
+		});
 		if (cardSet?.cards && currentCardIndex < cardSet.cards.length - 1) {
 			currentCardIndex++;
 			lastNavigationTime = Date.now();
@@ -299,7 +303,7 @@
 
 		// Toggle dropdown if we have chapters available
 		if (hasAvailableChapters || allChapters.length > 0) {
-		showChapterDropdown = !showChapterDropdown;
+			showChapterDropdown = !showChapterDropdown;
 		}
 	};
 
@@ -424,7 +428,7 @@
 	// Handle mouse click navigation
 	const handleCardClick = (event) => {
 		if (!isOpen) return;
-		
+
 		// Don't handle navigation if a modal is open
 		if (showNoteModal || showTagModal || showRecapModal || showProgressModal) {
 			return;
@@ -458,7 +462,7 @@
 
 		// Use bookId from props if available, otherwise try to derive it
 		let rootBookId = bookId;
-		
+
 		if (!rootBookId && currentChapter) {
 			// Fallback: try currentChapter.id (might work if it's the root)
 			rootBookId = currentChapter.id;
@@ -506,18 +510,18 @@
 	// Reset card index when modal opens
 	$: if (isOpen && cardSet?.cards && typeof document !== 'undefined') {
 		document.body.style.overflow = 'hidden';
-		
+
 		const currentCardSetId = cardSet.id || cardSet.cards[0]?.card_set_id || cardSet.cards[0]?.id;
-		
+
 		// Only initialize card index once per cardSet
 		if (currentCardSetId !== lastCardSetId) {
 			lastCardSetId = currentCardSetId;
 			hasInitializedCardIndex = false;
 		}
-		
+
 		if (!hasInitializedCardIndex) {
 			hasInitializedCardIndex = true;
-			
+
 			// Use initialCardIndex if provided, otherwise load user's saved position
 			if (initialCardIndex !== null && initialCardIndex !== undefined && initialCardIndex >= 0) {
 				// Validate the index is within bounds
@@ -525,8 +529,8 @@
 				currentCardIndex = Math.max(0, validIndex);
 				console.log('Using initial card index:', currentCardIndex);
 			} else {
-		// Load user's saved position
-		loadUserCursor();
+				// Load user's saved position
+				loadUserCursor();
 			}
 		}
 
@@ -888,7 +892,10 @@
 	const loadBookProgress = async () => {
 		console.log('loadBookProgress called', { currentUser, currentChapter });
 		if (!currentUser || !currentChapter?.id) {
-			console.warn('Missing user or chapter', { currentUser: !!currentUser, currentChapter: !!currentChapter });
+			console.warn('Missing user or chapter', {
+				currentUser: !!currentUser,
+				currentChapter: !!currentChapter
+			});
 			progressError = 'User or chapter not available';
 			return;
 		}
@@ -897,7 +904,10 @@
 		progressError = null;
 
 		try {
-			console.log('Fetching book progress for:', { userId: currentUser.id, chapterId: currentChapter.id });
+			console.log('Fetching book progress for:', {
+				userId: currentUser.id,
+				chapterId: currentChapter.id
+			});
 			const response = await Api.get(`/users/${currentUser.id}/book_progress/${currentChapter.id}`);
 			console.log('Book progress response:', response);
 			bookProgress = response;
@@ -974,7 +984,7 @@
 		}
 
 		const currentCard = cardSet.cards[currentCardIndex];
-		
+
 		// Find the Heart tag ID
 		let heartTagId = null;
 		try {
@@ -1032,7 +1042,7 @@
 			const response = await Api.get(
 				`/user_notes?notable_type=Card&notable_id=${currentCard.id}&user_id=${currentUser.id}`
 			);
-			
+
 			if (response && response.length > 0) {
 				currentNote = response[0];
 				noteBody = currentNote.body || '';
@@ -1150,9 +1160,13 @@
 	})();
 
 	// Check if there are available chapters to navigate to
-	$: hasAvailableChapters = (bookData && bookData.siblings && bookData.siblings.filter(
-		(sibling) => sibling.card_set && sibling.card_set.cards && sibling.card_set.cards.length > 0
-	).length > 0) || allChapters.length > 0;
+	$: hasAvailableChapters =
+		(bookData &&
+			bookData.siblings &&
+			bookData.siblings.filter(
+				(sibling) => sibling.card_set && sibling.card_set.cards && sibling.card_set.cards.length > 0
+			).length > 0) ||
+		allChapters.length > 0;
 
 	// Get book title from various sources
 	$: displayBookTitle = (() => {
@@ -1196,7 +1210,7 @@
 				const passageTypeTag = currentCardTags.find((tag) => tag.tag_type === 'passage_type');
 				selectedTagId = passageTypeTag ? passageTypeTag.id : null;
 			}
-			
+
 			// Load note if card has heart tag (only if modal is not open to avoid unnecessary calls)
 			if (hasHeartTag && !showNoteModal && currentUser) {
 				loadNote();
@@ -1234,36 +1248,42 @@
 			<!-- Header -->
 			<div class="fullscreen-header">
 				<div class="fullscreen-title-container">
-						<div class="chapter-dropdown">
-							<button class="chapter-dropdown-toggle" on:click={toggleChapterDropdown}>
+					<div class="chapter-dropdown">
+						<button class="chapter-dropdown-toggle" on:click={toggleChapterDropdown}>
 							{#if displayBookTitle}
 								<span class="book-title-pill">
 									{displayBookTitle}
 								</span>
 							{/if}
-								<span class="chapter-title">
+							<span class="chapter-title">
 								{currentChapter?.title || title || cardSet.title}
-								</span>
+							</span>
 							{#if hasAvailableChapters || isLoadingChapters}
 								<i class="fas fa-chevron-down" class:rotated={showChapterDropdown} />
 							{/if}
-							</button>
+						</button>
 
-							{#if showChapterDropdown}
-								<div
-									class="chapter-dropdown-menu"
-									on:touchstart={handleDropdownTouch}
-									on:touchmove={handleDropdownTouch}
-								>
+						{#if showChapterDropdown}
+							<div
+								class="chapter-dropdown-menu"
+								on:touchstart={handleDropdownTouch}
+								on:touchmove={handleDropdownTouch}
+							>
 								{#if isLoadingChapters}
 									<div class="chapter-loading">
 										<div class="spinner-small" />
 										<span>Loading chapters...</span>
 									</div>
 								{:else}
-									{@const chaptersToShow = (bookData && bookData.siblings && bookData.siblings.length > 0) 
-										? bookData.siblings.filter((sibling) => sibling.card_set && sibling.card_set.cards && sibling.card_set.cards.length > 0)
-										: allChapters}
+									{@const chaptersToShow =
+										bookData && bookData.siblings && bookData.siblings.length > 0
+											? bookData.siblings.filter(
+													(sibling) =>
+														sibling.card_set &&
+														sibling.card_set.cards &&
+														sibling.card_set.cards.length > 0
+											  )
+											: allChapters}
 									{#each chaptersToShow as chapterItem}
 										<button
 											class="chapter-option"
@@ -1276,9 +1296,9 @@
 									{#if chaptersToShow.length === 0}
 										<div class="chapter-empty">No chapters available</div>
 									{/if}
-							{/if}
-						</div>
-					{/if}
+								{/if}
+							</div>
+						{/if}
 					</div>
 				</div>
 				<button class="fullscreen-close" on:click={handleClose}>
@@ -1349,13 +1369,13 @@
 					<i class="fas fa-chevron-left" />
 				</button>
 
-				<div 
-					class="nav-indicator" 
+				<div
+					class="nav-indicator"
 					on:click={(e) => {
 						e.preventDefault();
 						e.stopPropagation();
 						openProgressModal(e);
-					}} 
+					}}
 					on:keydown={(e) => {
 						if (e.key === 'Enter' || e.key === ' ') {
 							e.preventDefault();
@@ -1363,8 +1383,8 @@
 							openProgressModal(e);
 						}
 					}}
-					role="button" 
-					tabindex="0" 
+					role="button"
+					tabindex="0"
 					title="View book progress"
 				>
 					{currentCardIndex + 1} / {cardSet.cards.length}
@@ -1563,9 +1583,7 @@
 						<i class="fas fa-trash" /> Delete
 					</button>
 				{/if}
-				<button class="note-button note-button-cancel" on:click={closeNoteModal}>
-					Cancel
-				</button>
+				<button class="note-button note-button-cancel" on:click={closeNoteModal}> Cancel </button>
 				<button
 					class="note-button note-button-save"
 					on:click={saveNote}
@@ -1628,6 +1646,48 @@
 							</div>
 						</div>
 
+						{#if bookProgress.current_chapter_index !== null && bookProgress.current_chapter_index !== undefined && bookProgress.chapters && bookProgress.chapters.length > 0}
+							{@const projectedCardsRead = (() => {
+								// Calculate projected cards if we finish the current chapter
+								// Sum all cards from chapters 0 to current_chapter_index (inclusive)
+								let total = 0;
+								for (
+									let i = 0;
+									i <= bookProgress.current_chapter_index && i < bookProgress.chapters.length;
+									i++
+								) {
+									total += bookProgress.chapters[i].card_count || 0;
+								}
+								return total;
+							})()}
+							{@const currentPercentage = bookProgress.progress_percentage || 0}
+							{@const projectedPercentage =
+								bookProgress.total_cards > 0
+									? (projectedCardsRead / bookProgress.total_cards) * 100
+									: 0}
+							{@const orangeWidth = Math.max(
+								0,
+								Math.min(projectedPercentage - currentPercentage, 100 - currentPercentage)
+							)}
+							<div class="progress-stat-item progress-stat-item-subtle">
+								<div class="progress-stat-label">Chapter Completion</div>
+								<div class="progress-stat-value progress-stat-value-smaller">
+									If you finish this chapter you will be at <span class="progress-percentage-pill"
+										>{projectedPercentage.toFixed(2)}%</span
+									>
+								</div>
+								<div class="progress-bar-container">
+									<div class="progress-bar-fill" style="width: {currentPercentage}%" />
+									{#if orangeWidth > 0}
+										<div
+											class="progress-bar-fill progress-bar-fill-forecast"
+											style="width: {orangeWidth}%; left: {currentPercentage}%"
+										/>
+									{/if}
+								</div>
+							</div>
+						{/if}
+
 						<div class="progress-stat-item">
 							<div class="progress-stat-label">Chapters</div>
 							<div class="progress-stat-value">
@@ -1642,7 +1702,10 @@
 									{bookProgress.daily_average.cards_per_day || 0} cards per day
 								</div>
 								<div class="progress-stat-subtext">
-									Active for {bookProgress.daily_average.days_active || 0} day{bookProgress.daily_average.days_active !== 1 ? 's' : ''}
+									Active for {bookProgress.daily_average.days_active || 0} day{bookProgress
+										.daily_average.days_active !== 1
+										? 's'
+										: ''}
 								</div>
 							</div>
 						{/if}
@@ -3483,6 +3546,57 @@
 		gap: 0.75rem;
 	}
 
+	.progress-stat-item-subtle {
+		padding-top: 0.5rem;
+		margin-top: 0.5rem;
+		border-top: 1px solid #e1e5e9;
+	}
+
+	.dark .progress-stat-item-subtle {
+		border-top-color: #3f4447;
+	}
+
+	.progress-stat-value-smaller {
+		font-size: 1.1rem;
+		font-weight: 600;
+		color: #1a1a1a;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.dark .progress-stat-value-smaller {
+		color: #ffffff;
+	}
+
+	.progress-percentage-pill {
+		display: inline-block;
+		padding: 0.4rem 1rem;
+		background: linear-gradient(135deg, #ff9800, #f57c00);
+		color: #ffffff;
+		border-radius: 20px;
+		font-weight: 700;
+		font-size: 1.1rem;
+		box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
+		transition: transform 0.2s ease, box-shadow 0.2s ease;
+		white-space: nowrap;
+	}
+
+	.progress-percentage-pill:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4);
+	}
+
+	.dark .progress-percentage-pill {
+		background: linear-gradient(135deg, #ff9800, #f57c00);
+		box-shadow: 0 2px 8px rgba(255, 152, 0, 0.4);
+	}
+
+	.dark .progress-percentage-pill:hover {
+		box-shadow: 0 4px 12px rgba(255, 152, 0, 0.5);
+	}
+
 	.progress-stat-label {
 		font-size: 0.875rem;
 		font-weight: 600;
@@ -3521,6 +3635,7 @@
 		border-radius: 6px;
 		overflow: hidden;
 		margin-top: 0.5rem;
+		position: relative;
 	}
 
 	.dark .progress-bar-container {
@@ -3532,6 +3647,16 @@
 		background: linear-gradient(90deg, #007bff, #0056b3);
 		border-radius: 6px;
 		transition: width 0.3s ease;
+		position: relative;
+	}
+
+	.progress-bar-fill-forecast {
+		background: linear-gradient(90deg, #ff9800, #f57c00);
+		position: absolute;
+		top: 0;
+		left: 0;
+		border-radius: 0 6px 6px 0;
+		z-index: 1;
 	}
 
 	.progress-stat-percentage {

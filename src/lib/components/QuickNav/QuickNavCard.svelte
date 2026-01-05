@@ -11,9 +11,12 @@
 	let allCardTags = {};
 	let currentCardIndex = 0;
 	let isLoadingProgress = false;
+	let bookProgress = null;
+	let isLoadingBookProgress = false;
 
 	// Reactive variable to control card border radius
 	$: hasProgressBar = cardSet && cardSet.cards && cardSet.cards.length > 0 && !isLoadingProgress;
+	$: hasBookProgress = bookProgress !== null && !isLoadingBookProgress;
 
 	// Color mapping for tag types (same as FullscreenModal)
 	const tagColors = {
@@ -87,6 +90,22 @@
 		}
 	}
 
+	// Load book progress
+	async function loadBookProgress() {
+		if (!cursorData || !cursorData.chapter || !$user) return;
+
+		isLoadingBookProgress = true;
+		try {
+			const response = await Api.get(`/users/${$user.id}/book_progress/${cursorData.chapter.id}`);
+			bookProgress = response;
+		} catch (error) {
+			console.error('Failed to load book progress:', error);
+			bookProgress = null;
+		} finally {
+			isLoadingBookProgress = false;
+		}
+	}
+
 	// Generate progress bar segments
 	$: progressSegments = (() => {
 		if (!cardSet?.cards || cardSet.cards.length === 0) {
@@ -147,6 +166,7 @@
 
 	onMount(() => {
 		loadProgressData();
+		loadBookProgress();
 	});
 </script>
 
@@ -179,6 +199,14 @@
 					/>
 				{/each}
 			</div>
+			{#if hasBookProgress && bookProgress.progress_percentage !== undefined}
+				<div class="book-progress-bar">
+					<div
+						class="book-progress-fill"
+						style="width: {bookProgress.progress_percentage || 0}%"
+					/>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>
@@ -383,7 +411,7 @@
 	/* Mini Progress Bar Styles */
 	.mini-progress-container {
 		width: 100%;
-		padding: 0 1rem 0.75rem 1rem;
+		padding: 0.75rem 1rem 0.75rem 1rem;
 		background: white;
 		border: 1px solid #e1e5e9;
 		border-top: none;
@@ -393,6 +421,9 @@
 		transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
 			box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 		will-change: border-color, box-shadow;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
 	}
 
 	.mini-progress-bar {
@@ -413,6 +444,32 @@
 	:global(.dark) .mini-progress-bar {
 		background: #2d3238;
 		box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+	}
+
+	.book-progress-bar {
+		position: relative;
+		width: 100%;
+		height: 3px;
+		background: #e1e5e9;
+		border-radius: 2px;
+		overflow: hidden;
+		box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+	}
+
+	.book-progress-fill {
+		height: 100%;
+		background: linear-gradient(90deg, #007bff, #0056b3);
+		border-radius: 2px;
+		transition: width 0.3s ease;
+	}
+
+	:global(.dark) .book-progress-bar {
+		background: #2d3238;
+		box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+	}
+
+	:global(.dark) .book-progress-fill {
+		background: linear-gradient(90deg, #4dabf7, #339af0);
 	}
 
 	.mini-progress-segment {
