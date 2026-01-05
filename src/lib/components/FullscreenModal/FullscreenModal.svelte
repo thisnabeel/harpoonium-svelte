@@ -64,6 +64,12 @@
 	let isSavingNote = false;
 	let noteLoadError = null;
 
+	// Progress modal management
+	let showProgressModal = false;
+	let bookProgress = null;
+	let isLoadingProgress = false;
+	let progressError = null;
+
 	// Color mapping for tag types (enhanced color scheme for better contrast and visual appeal)
 	const tagColors = {
 		'Description / Worldbuilding': '#5dade2', // Vibrant Sky Blue
@@ -293,7 +299,7 @@
 
 		// Toggle dropdown if we have chapters available
 		if (hasAvailableChapters || allChapters.length > 0) {
-			showChapterDropdown = !showChapterDropdown;
+		showChapterDropdown = !showChapterDropdown;
 		}
 	};
 
@@ -344,7 +350,7 @@
 
 		// Don't handle navigation if a modal is open or if user is typing in an input/textarea
 		const isTyping = event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA';
-		if (showNoteModal || showTagModal || showRecapModal || isTyping) {
+		if (showNoteModal || showTagModal || showRecapModal || showProgressModal || isTyping) {
 			// Only handle Escape key to close modals
 			if (event.key === 'Escape') {
 				if (showNoteModal) {
@@ -356,6 +362,9 @@
 				} else if (showRecapModal) {
 					event.preventDefault();
 					closeRecapModal();
+				} else if (showProgressModal) {
+					event.preventDefault();
+					closeProgressModal();
 				}
 			}
 			return;
@@ -417,7 +426,7 @@
 		if (!isOpen) return;
 		
 		// Don't handle navigation if a modal is open
-		if (showNoteModal || showTagModal || showRecapModal) {
+		if (showNoteModal || showTagModal || showRecapModal || showProgressModal) {
 			return;
 		}
 
@@ -516,8 +525,8 @@
 				currentCardIndex = Math.max(0, validIndex);
 				console.log('Using initial card index:', currentCardIndex);
 			} else {
-				// Load user's saved position
-				loadUserCursor();
+		// Load user's saved position
+		loadUserCursor();
 			}
 		}
 
@@ -875,6 +884,51 @@
 		selectedTagId = null;
 	};
 
+	// Load book progress
+	const loadBookProgress = async () => {
+		console.log('loadBookProgress called', { currentUser, currentChapter });
+		if (!currentUser || !currentChapter?.id) {
+			console.warn('Missing user or chapter', { currentUser: !!currentUser, currentChapter: !!currentChapter });
+			progressError = 'User or chapter not available';
+			return;
+		}
+
+		isLoadingProgress = true;
+		progressError = null;
+
+		try {
+			console.log('Fetching book progress for:', { userId: currentUser.id, chapterId: currentChapter.id });
+			const response = await Api.get(`/users/${currentUser.id}/book_progress/${currentChapter.id}`);
+			console.log('Book progress response:', response);
+			bookProgress = response;
+		} catch (error) {
+			console.error('Failed to load book progress:', error);
+			progressError = error.response?.data?.error || error.message || 'Failed to load progress';
+		} finally {
+			isLoadingProgress = false;
+		}
+	};
+
+	// Open progress modal
+	const openProgressModal = async (event) => {
+		if (event) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+		console.log('openProgressModal called', { currentUser, currentChapter });
+		showProgressModal = true;
+		progressError = null;
+		bookProgress = null;
+		await loadBookProgress();
+	};
+
+	// Close progress modal
+	const closeProgressModal = () => {
+		showProgressModal = false;
+		bookProgress = null;
+		progressError = null;
+	};
+
 	// Save tag
 	const saveTag = async () => {
 		if (!cardSet?.cards || !cardSet.cards[currentCardIndex]) {
@@ -1180,27 +1234,27 @@
 			<!-- Header -->
 			<div class="fullscreen-header">
 				<div class="fullscreen-title-container">
-					<div class="chapter-dropdown">
-						<button class="chapter-dropdown-toggle" on:click={toggleChapterDropdown}>
+						<div class="chapter-dropdown">
+							<button class="chapter-dropdown-toggle" on:click={toggleChapterDropdown}>
 							{#if displayBookTitle}
 								<span class="book-title-pill">
 									{displayBookTitle}
 								</span>
 							{/if}
-							<span class="chapter-title">
+								<span class="chapter-title">
 								{currentChapter?.title || title || cardSet.title}
-							</span>
+								</span>
 							{#if hasAvailableChapters || isLoadingChapters}
 								<i class="fas fa-chevron-down" class:rotated={showChapterDropdown} />
 							{/if}
-						</button>
+							</button>
 
-						{#if showChapterDropdown}
-							<div
-								class="chapter-dropdown-menu"
-								on:touchstart={handleDropdownTouch}
-								on:touchmove={handleDropdownTouch}
-							>
+							{#if showChapterDropdown}
+								<div
+									class="chapter-dropdown-menu"
+									on:touchstart={handleDropdownTouch}
+									on:touchmove={handleDropdownTouch}
+								>
 								{#if isLoadingChapters}
 									<div class="chapter-loading">
 										<div class="spinner-small" />
@@ -1222,9 +1276,9 @@
 									{#if chaptersToShow.length === 0}
 										<div class="chapter-empty">No chapters available</div>
 									{/if}
-								{/if}
-							</div>
-						{/if}
+							{/if}
+						</div>
+					{/if}
 					</div>
 				</div>
 				<button class="fullscreen-close" on:click={handleClose}>
@@ -1295,7 +1349,24 @@
 					<i class="fas fa-chevron-left" />
 				</button>
 
-				<div class="nav-indicator">
+				<div 
+					class="nav-indicator" 
+					on:click={(e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						openProgressModal(e);
+					}} 
+					on:keydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							e.stopPropagation();
+							openProgressModal(e);
+						}
+					}}
+					role="button" 
+					tabindex="0" 
+					title="View book progress"
+				>
 					{currentCardIndex + 1} / {cardSet.cards.length}
 				</div>
 
@@ -1507,6 +1578,76 @@
 						{currentNote ? 'Update' : 'Save'}
 					{/if}
 				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Progress Modal -->
+{#if showProgressModal}
+	<div class="progress-overlay" on:click={closeProgressModal}>
+		<div class="progress-modal" on:click|stopPropagation={() => {}}>
+			<div class="progress-header">
+				<h3>Reading Progress</h3>
+				<button class="progress-close" on:click={closeProgressModal}>
+					<i class="fas fa-times" />
+				</button>
+			</div>
+
+			<div class="progress-content">
+				{#if isLoadingProgress}
+					<div class="progress-loading">
+						<div class="spinner-small" />
+						<span>Loading progress...</span>
+					</div>
+				{:else if progressError}
+					<div class="progress-error">
+						<div class="progress-error-icon">⚠️</div>
+						<div class="progress-error-message">{progressError}</div>
+						<button class="progress-retry-button" on:click={loadBookProgress}> Retry </button>
+					</div>
+				{:else if bookProgress}
+					<div class="progress-book-info">
+						<h4>{bookProgress.book?.title || 'Book'}</h4>
+					</div>
+
+					<div class="progress-stats">
+						<div class="progress-stat-item">
+							<div class="progress-stat-label">Overall Progress</div>
+							<div class="progress-stat-value">
+								{bookProgress.cards_read || 0} / {bookProgress.total_cards || 0} cards
+							</div>
+							<div class="progress-bar-container">
+								<div
+									class="progress-bar-fill"
+									style="width: {bookProgress.progress_percentage || 0}%"
+								/>
+							</div>
+							<div class="progress-stat-percentage">
+								{bookProgress.progress_percentage || 0}%
+							</div>
+						</div>
+
+						<div class="progress-stat-item">
+							<div class="progress-stat-label">Chapters</div>
+							<div class="progress-stat-value">
+								{bookProgress.chapters_read || 0} / {bookProgress.total_chapters || 0} chapters
+							</div>
+						</div>
+
+						{#if bookProgress.daily_average}
+							<div class="progress-stat-item">
+								<div class="progress-stat-label">Daily Reading Average</div>
+								<div class="progress-stat-value">
+									{bookProgress.daily_average.cards_per_day || 0} cards per day
+								</div>
+								<div class="progress-stat-subtext">
+									Active for {bookProgress.daily_average.days_active || 0} day{bookProgress.daily_average.days_active !== 1 ? 's' : ''}
+								</div>
+							</div>
+						{/if}
+					</div>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -2143,6 +2284,13 @@
 		font-size: 1rem;
 		font-weight: 600;
 		color: #1a1a1a;
+		cursor: pointer;
+		user-select: none;
+		transition: opacity 0.2s ease;
+	}
+
+	.nav-indicator:hover {
+		opacity: 0.7;
 	}
 
 	.dark .nav-indicator {
@@ -3171,6 +3319,252 @@
 			min-width: 80px;
 			padding: 0.5rem 0.75rem;
 			font-size: 0.85rem;
+		}
+	}
+
+	/* Progress Modal Styles */
+	.progress-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.6);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 10000;
+		backdrop-filter: blur(4px);
+	}
+
+	.progress-modal {
+		background: #ffffff;
+		border-radius: 12px;
+		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+		max-width: 600px;
+		width: 100%;
+		max-height: 80vh;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+		animation: fadeIn 0.2s ease;
+	}
+
+	.dark .progress-modal {
+		background: #1a1d21;
+		border: 1px solid #2d3238;
+	}
+
+	.progress-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 1.5rem 2rem;
+		border-bottom: 1px solid #e1e5e9;
+		background: #f8f9fa;
+	}
+
+	.dark .progress-header {
+		background: #2d3238;
+		border-bottom-color: #3f4447;
+	}
+
+	.progress-header h3 {
+		margin: 0;
+		font-size: 1.5rem;
+		font-weight: 600;
+		color: #1a1a1a;
+	}
+
+	.dark .progress-header h3 {
+		color: #ffffff;
+	}
+
+	.progress-close {
+		background: none;
+		border: none;
+		font-size: 1.5rem;
+		color: #6c757d;
+		cursor: pointer;
+		padding: 0.5rem;
+		line-height: 1;
+		transition: color 0.2s ease;
+	}
+
+	.progress-close:hover {
+		color: #1a1a1a;
+	}
+
+	.dark .progress-close {
+		color: #9ca3af;
+	}
+
+	.dark .progress-close:hover {
+		color: #ffffff;
+	}
+
+	.progress-content {
+		padding: 2rem;
+		overflow-y: auto;
+		flex: 1;
+	}
+
+	.progress-loading,
+	.progress-error {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		padding: 3rem 2rem;
+		text-align: center;
+	}
+
+	.progress-loading {
+		gap: 1rem;
+	}
+
+	.progress-error {
+		gap: 1rem;
+	}
+
+	.progress-error-icon {
+		font-size: 3rem;
+	}
+
+	.progress-error-message {
+		color: #dc3545;
+		font-size: 1rem;
+	}
+
+	.dark .progress-error-message {
+		color: #ff6b6b;
+	}
+
+	.progress-retry-button {
+		padding: 0.75rem 1.5rem;
+		background: #007bff;
+		color: white;
+		border: none;
+		border-radius: 6px;
+		font-size: 1rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: background 0.2s ease;
+	}
+
+	.progress-retry-button:hover {
+		background: #0056b3;
+	}
+
+	.progress-book-info {
+		margin-bottom: 2rem;
+	}
+
+	.progress-book-info h4 {
+		margin: 0;
+		font-size: 1.25rem;
+		font-weight: 600;
+		color: #1a1a1a;
+	}
+
+	.dark .progress-book-info h4 {
+		color: #ffffff;
+	}
+
+	.progress-stats {
+		display: flex;
+		flex-direction: column;
+		gap: 2rem;
+	}
+
+	.progress-stat-item {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.progress-stat-label {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: #6c757d;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.dark .progress-stat-label {
+		color: #9ca3af;
+	}
+
+	.progress-stat-value {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: #1a1a1a;
+	}
+
+	.dark .progress-stat-value {
+		color: #ffffff;
+	}
+
+	.progress-stat-subtext {
+		font-size: 0.875rem;
+		color: #6c757d;
+	}
+
+	.dark .progress-stat-subtext {
+		color: #9ca3af;
+	}
+
+	.progress-bar-container {
+		width: 100%;
+		height: 12px;
+		background: #e1e5e9;
+		border-radius: 6px;
+		overflow: hidden;
+		margin-top: 0.5rem;
+	}
+
+	.dark .progress-bar-container {
+		background: #2d3238;
+	}
+
+	.progress-bar-fill {
+		height: 100%;
+		background: linear-gradient(90deg, #007bff, #0056b3);
+		border-radius: 6px;
+		transition: width 0.3s ease;
+	}
+
+	.progress-stat-percentage {
+		font-size: 1rem;
+		font-weight: 600;
+		color: #007bff;
+		text-align: right;
+	}
+
+	.dark .progress-stat-percentage {
+		color: #4dabf7;
+	}
+
+	@media (max-width: 768px) {
+		.progress-modal {
+			max-width: 95%;
+			max-height: 90vh;
+		}
+
+		.progress-header {
+			padding: 1rem 1.5rem;
+		}
+
+		.progress-header h3 {
+			font-size: 1.1rem;
+		}
+
+		.progress-content {
+			padding: 1.5rem;
+		}
+
+		.progress-stat-value {
+			font-size: 1.25rem;
 		}
 	}
 </style>

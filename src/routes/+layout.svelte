@@ -72,7 +72,7 @@
 					`${modalData.title.split(' - ')[0]} - ${nextChapter.title}`,
 					modalData.bookData, // Keep the same book data
 					nextChapter,
-					null, // initialCardIndex
+					0, // Always start at first card (index 0) when navigating to next chapter
 					modalData.bookId // Keep the same bookId
 				);
 			});

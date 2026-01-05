@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import Api from '$lib/api/api';
 	import { theme } from '$lib/stores/main';
+	import { user } from '$lib/stores/user';
 	import { goto } from '$app/navigation';
 	import { selectedChapter } from '$lib/stores/chapters/mapper';
 	import { page } from '$app/stores';
@@ -38,6 +39,12 @@
 	let scrapingError = null;
 	/** @type {any} */
 	let scrapingResult = null;
+	/** @type {boolean} */
+	let isGeneratingAll = false;
+	/** @type {Set<number>} */
+	let chaptersWithCardSets = new Set();
+	/** @type {any} */
+	let generateAllResult = null;
 
 	onMount(async () => {
 		try {
@@ -48,6 +55,8 @@
 			book = response.book;
 			currentChapter = response.current_chapter;
 			tableOfContents = response.table_of_contents;
+			// Check which chapters have card sets
+			await checkCardSets();
 		} catch (err) {
 			error = 'Failed to load chapter structure';
 			console.error('Failed to load chapter structure:', err);
@@ -97,6 +106,44 @@
 	 */
 	function getIndentLevel(position) {
 		return position > 1 ? 1 : 0; // Simple indentation for now
+	}
+
+	// Check which chapters have card sets
+	async function checkCardSets() {
+		if (!tableOfContents || tableOfContents.length === 0) return;
+		
+		const chapterIds = [];
+		const getAllChapterIds = (chapters) => {
+			chapters.forEach((ch) => {
+				chapterIds.push(ch.id);
+				if (ch.chapters) {
+					getAllChapterIds(ch.chapters);
+				}
+			});
+		};
+		getAllChapterIds(tableOfContents);
+		
+		// Check each chapter for card sets (batch requests to avoid too many simultaneous calls)
+		const batchSize = 10;
+		for (let i = 0; i < chapterIds.length; i += batchSize) {
+			const batch = chapterIds.slice(i, i + batchSize);
+			await Promise.all(
+				batch.map(async (id) => {
+					try {
+						const response = await Api.get(`/chapters/${id}/card_sets`);
+						if (response && Array.isArray(response) && response.length > 0) {
+							chaptersWithCardSets.add(id);
+						}
+					} catch (err) {
+						// 404 is expected for chapters without card sets - don't log it
+						if (err.response?.status !== 404) {
+							console.warn(`Error checking card sets for chapter ${id}:`, err);
+						}
+					}
+				})
+			);
+		}
+		chaptersWithCardSets = chaptersWithCardSets; // Trigger reactivity
 	}
 
 	/**
@@ -388,6 +435,39 @@
 	}
 
 	/**
+	 * Generate card sets for all chapters
+	 */
+	async function generateSetsForAll() {
+		if (!book?.id) {
+			alert('Book not found');
+			return;
+		}
+
+		if (!confirm(`Generate card sets for all chapters in "${book.title}"? This will skip chapters that already have card sets.`)) {
+			return;
+		}
+
+		isGeneratingAll = true;
+		generateAllResult = null;
+
+		try {
+			const response = await Api.post(`/chapters/${book.id}/generate_cards_sets_for_all`);
+			generateAllResult = response;
+			
+			// Refresh card set status
+			chaptersWithCardSets = new Set();
+			await checkCardSets();
+			
+			alert(`Generated ${response.generated} card sets. Skipped ${response.skipped} chapters.`);
+		} catch (err) {
+			console.error('Failed to generate card sets for all:', err);
+			alert('Failed to generate card sets. Please try again.');
+		} finally {
+			isGeneratingAll = false;
+		}
+	}
+
+	/**
 	 * Toggle Gutenberg scraper interface
 	 */
 	function toggleGutenbergScraper() {
@@ -537,6 +617,22 @@
 				</div>
 				<div class="create-buttons">
 					{#if !showBatchMode}
+						{#if $user?.admin}
+							<button
+								class="btn btn-success generate-all-btn"
+								on:click={generateSetsForAll}
+								disabled={isGeneratingAll}
+								title="Generate card sets for all chapters (skips chapters that already have card sets)"
+							>
+								{#if isGeneratingAll}
+									<div class="spinner-small" />
+									Generating...
+								{:else}
+									<i class="fas fa-bolt" />
+									Generate Sets for All
+								{/if}
+							</button>
+						{/if}
 						<button
 							class="btn btn-primary create-chapter-btn"
 							on:click={createNewChapter}
@@ -648,6 +744,9 @@
 						<div class="chapter-info">
 							<span class="position">Chapter {chapter.position}</span>
 							<span class="title">{chapter.title}</span>
+							{#if chaptersWithCardSets.has(chapter.id)}
+								<i class="fas fa-check-circle card-set-indicator" title="Has card set" />
+							{/if}
 						</div>
 						<button
 							class="btn btn-warning visit-btn"
@@ -1264,6 +1363,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
+		flex: 1;
 	}
 
 	.position {
@@ -1273,6 +1373,33 @@
 
 	.dark .position {
 		color: #8899a6;
+	}
+
+	.card-set-indicator {
+		color: #28a745;
+		font-size: 1rem;
+		margin-left: auto;
+	}
+
+	.dark .card-set-indicator {
+		color: #4ade80;
+	}
+
+	.generate-all-btn {
+		background: #28a745;
+		color: white;
+	}
+
+	.generate-all-btn:hover:not(:disabled) {
+		background: #218838;
+	}
+
+	.dark .generate-all-btn {
+		background: #2d5a3d;
+	}
+
+	.dark .generate-all-btn:hover:not(:disabled) {
+		background: #1e3d2a;
 	}
 
 	.title {

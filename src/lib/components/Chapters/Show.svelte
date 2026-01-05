@@ -43,7 +43,10 @@
 			const response = await Api.get(`/chapters/${chapter.id}/card_sets`);
 			cardSets = response || [];
 		} catch (err) {
-			console.error('Error fetching card sets:', err);
+			// 404 is expected if chapter has no card sets - don't log as error
+			if (err.response?.status !== 404) {
+				console.error('Error fetching card sets:', err);
+			}
 			cardSets = [];
 		} finally {
 			isLoadingCardSets = false;
