@@ -21,6 +21,7 @@
 	import { showFilter, showExplore } from '$lib/stores/header';
 	import Header from '$lib/components/Header/Header.svelte';
 	import QuickNavRow from '$lib/components/QuickNav/QuickNavRow.svelte';
+	import ReadingStats from '$lib/components/ReadingStats/ReadingStats.svelte';
 
 	const fetchPopularWonders = async () => {
 		const response = await Api.get('/museum.json');
@@ -91,6 +92,10 @@
 </svelte:head>
 
 <QuickNavRow />
+
+{#if $user}
+	<ReadingStats />
+{/if}
 
 <div class="quizzes">
 	{#if $isLoadingTweets}

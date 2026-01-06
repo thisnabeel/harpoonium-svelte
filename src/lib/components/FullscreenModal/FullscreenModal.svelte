@@ -70,6 +70,15 @@
 	let isLoadingProgress = false;
 	let progressError = null;
 
+	// Reading log tracking
+	let readingLogSessionId = null; // UUID for current session
+	let readingLogInterval = null; // 10-second check interval
+	let lastActivityTime = Date.now(); // Track last card navigation
+	let isTabVisible = true; // Track if tab is visible
+	let idleTimeout = null; // Track idle timeout
+	const IDLE_THRESHOLD = 5 * 60 * 1000; // 5 minutes of no activity = idle
+	const READING_INTERVAL = 10 * 1000; // 10 seconds
+
 	// Color mapping for tag types (enhanced color scheme for better contrast and visual appeal)
 	const tagColors = {
 		'Description / Worldbuilding': '#5dade2', // Vibrant Sky Blue
@@ -210,6 +219,7 @@
 		// Don't throttle direct navigation - user explicitly chose this card
 		// Only update lastNavigationTime to prevent rapid sequential navigation after direct jump
 		lastNavigationTime = Date.now();
+		lastActivityTime = Date.now(); // Update activity time for reading log
 
 		currentCardIndex = targetIndex;
 		saveUserCursor(); // Don't await - let it debounce in background
@@ -540,6 +550,11 @@
 			// Load all card tags for progress bar coloring (only once per cardSet)
 			loadAllCardTags();
 		}
+
+		// Start reading log tracking when modal opens
+		if (currentUser && bookId && !readingLogSessionId) {
+			startReadingLogTracking();
+		}
 	} else if (!isOpen && typeof document !== 'undefined') {
 		document.body.style.overflow = '';
 		// Clear tag map and loaded cardSet ID when modal closes
@@ -549,6 +564,8 @@
 		hasInitializedCardIndex = false;
 		// Reset card index when modal closes
 		currentCardIndex = 0;
+		// Stop reading log tracking
+		stopReadingLogTracking();
 	}
 
 	// Add keyboard event listener
@@ -578,9 +595,140 @@
 		document.removeEventListener('click', handleClickOutside);
 	}
 
+	// Generate UUID for session ID
+	const generateUUID = () => {
+		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+			const r = (Math.random() * 16) | 0;
+			const v = c === 'x' ? r : (r & 0x3) | 0x8;
+			return v.toString(16);
+		});
+	};
+
+	// Calculate reading percentage
+	const calculateReadingPercentage = () => {
+		if (!bookProgress) {
+			// Fallback: calculate from current card position
+			if (!cardSet?.cards || cardSet.cards.length === 0) return 0;
+			return ((currentCardIndex + 1) / cardSet.cards.length) * 100;
+		}
+		return bookProgress.progress_percentage || 0;
+	};
+
+	// Create reading log event
+	const createReadingLogEvent = async (eventType) => {
+		if (!currentUser || !bookId) return;
+
+		try {
+			const currentCard = cardSet?.cards?.[currentCardIndex];
+			const percentage = calculateReadingPercentage();
+
+			const payload = {
+				reading_log: {
+					event_type: eventType,
+					event_time: new Date().toISOString(),
+					percentage: percentage,
+					card_id: currentCard?.id || null,
+					book_id: bookId,
+					session_id: readingLogSessionId || generateUUID()
+				}
+			};
+
+			// If this is the first event, store the session ID
+			if (!readingLogSessionId && eventType === 'start') {
+				readingLogSessionId = payload.reading_log.session_id;
+			}
+
+			await Api.post('/reading_logs', payload);
+		} catch (error) {
+			console.error('Failed to create reading log event:', error);
+			// Don't throw - reading logs are non-critical
+		}
+	};
+
+	// Start reading log tracking
+	const startReadingLogTracking = async () => {
+		if (!currentUser || !bookId) return;
+
+		// Generate session ID
+		readingLogSessionId = generateUUID();
+		lastActivityTime = Date.now();
+		isTabVisible = document.visibilityState === 'visible';
+
+		// Create start event
+		await createReadingLogEvent('start');
+
+		// Set up visibility change listener
+		if (typeof document !== 'undefined') {
+			document.addEventListener('visibilitychange', handleVisibilityChange);
+			window.addEventListener('beforeunload', handleBeforeUnload);
+		}
+
+		// Start interval for reading events
+		readingLogInterval = setInterval(async () => {
+			if (!isTabVisible) {
+				// Tab is hidden, don't send reading events
+				return;
+			}
+
+			const timeSinceActivity = Date.now() - lastActivityTime;
+			if (timeSinceActivity > IDLE_THRESHOLD) {
+				// User is idle, create close event and stop tracking
+				await createReadingLogEvent('close');
+				stopReadingLogTracking();
+				return;
+			}
+
+			// User is active, update reading event
+			await createReadingLogEvent('reading');
+		}, READING_INTERVAL);
+	};
+
+	// Stop reading log tracking
+	const stopReadingLogTracking = () => {
+		if (readingLogInterval) {
+			clearInterval(readingLogInterval);
+			readingLogInterval = null;
+		}
+
+		if (typeof document !== 'undefined') {
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
+			window.removeEventListener('beforeunload', handleBeforeUnload);
+		}
+
+		readingLogSessionId = null;
+		lastActivityTime = Date.now();
+	};
+
+	// Handle visibility change (tab switch)
+	const handleVisibilityChange = async () => {
+		const wasVisible = isTabVisible;
+		isTabVisible = document.visibilityState === 'visible';
+
+		if (wasVisible && !isTabVisible) {
+			// Tab just became hidden
+			// Wait 2 minutes, then close session if still hidden
+			setTimeout(async () => {
+				if (!isTabVisible && readingLogSessionId) {
+					await createReadingLogEvent('close');
+					stopReadingLogTracking();
+				}
+			}, 2 * 60 * 1000); // 2 minutes
+		}
+	};
+
+	// Handle before unload (browser close)
+	const handleBeforeUnload = async () => {
+		if (readingLogSessionId) {
+			// Try to send close event (may not always work due to browser limitations)
+			await createReadingLogEvent('close');
+		}
+	};
+
 	// Save cursor when modal closes
 	const handleClose = async () => {
 		await saveUserCursorImmediate(); // Use immediate save for modal close
+		await createReadingLogEvent('close'); // Create close event
+		stopReadingLogTracking(); // Clean up tracking
 		onClose();
 	};
 
@@ -1238,6 +1386,15 @@
 		if (loadTagsTimer) {
 			clearTimeout(loadTagsTimer);
 			loadTagsTimer = null;
+		}
+
+		// Clean up reading log tracking
+		stopReadingLogTracking();
+		if (readingLogSessionId) {
+			// Try to create close event on destroy
+			createReadingLogEvent('close').catch(() => {
+				// Ignore errors on destroy
+			});
 		}
 	});
 </script>
